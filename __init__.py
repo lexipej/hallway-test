@@ -58,13 +58,13 @@ def _data_dir() -> Path:
     return plugin_data_dir(PLUGIN)
 
 
-def _make_complete(ctx, max_tokens: int):
+def _make_complete(ctx, max_tokens: int, timeout: float = 90):
     def complete(messages: list[dict]) -> str:
         last = None
         for _ in range(2):  # one retry for a transient provider error
             try:
                 res = ctx.llm.complete(messages, temperature=0.4,
-                                       max_tokens=max_tokens, timeout=90, purpose="hallway-test persona step")
+                                       max_tokens=max_tokens, timeout=timeout, purpose="hallway-test persona step")
                 return res.text
             except Exception as exc:  # noqa: BLE001 - surfaced after the retry
                 last = exc
@@ -99,7 +99,7 @@ def _run(ctx, args, url, is_demo, compare, task, success, viewport, max_steps, t
     return run_test(url, task, _make_complete(ctx, 700), pick(args.get("personas")), _data_dir(),
                     success_text=success, compare_url=compare, facts=args.get("facts", ""), max_steps=max_steps,
                     parallel=int(ctx.get_config("parallel", 10)), viewport=viewport, title=title,
-                    findings_complete=_make_complete(ctx, 3000),
+                    findings_complete=_make_complete(ctx, 3000, timeout=180),
                     time_budget=float(ctx.get_config("time_budget_seconds", 330)))
 
 

@@ -197,7 +197,11 @@ def run_persona(url: str, p: Persona, variant: str, task: str, complete: Complet
 
     dead = sum(1 for s in steps if s.get("kind") == "click" and s.get("changed") is False)
     thoughts = [s["thought"] for s in steps if s.get("thought")]
+    reason = reason.strip(" <>\"'")
+    if status == "gave_up" and reason.lower() in ("", "gave up", "give up", "i give up"):
+        reason = thoughts[-1] if thoughts else "gave up"
     quote = reason if status == "gave_up" else next((t for t in thoughts if HESITANT.search(t)), thoughts[-1] if thoughts else "")
+    quote = quote.strip(" <>\"'")
     clicks = [s["click"] for s in steps if s.get("click") and s.get("screen") == start_fp]
     out = {"persona": p.id, "variant": variant, "status": status, "reason": reason, "steps": steps,
            "n_steps": len([s for s in steps if s["action"] != "(task complete)"]), "dead_clicks": dead,
@@ -217,7 +221,9 @@ def summarise(o: dict) -> str:
     return base
 
 
-def findings(task: str, results: list[dict], personas: dict, complete: Optional[Complete]) -> tuple[list[dict], str]:
+def findings(task: str, results: list[dict], personas: dict, complete: Optional[Complete],
+             issues_note: Optional[list] = None) -> tuple[list[dict], str]:
+    issues_note = issues_note if issues_note is not None else []
     issues: dict[tuple, dict] = {}
     for r in results:
         for screen in r["audit"].values():
@@ -233,11 +239,14 @@ def findings(task: str, results: list[dict], personas: dict, complete: Optional[
             outcomes.append(f"- {p.name} ({r['variant']}): {summarise(r)}. {('Reason: ' + r['reason']) if r['reason'] else ''} {words}")
         prompt = FINDINGS_PROMPT.format(task=task, outcomes="\n".join(outcomes), audit="\n".join(audit_lines) or "(none)")
         try:
-            got = parse_findings(complete([{"role": "user", "content": prompt}]))
+            raw = complete([{"role": "user", "content": prompt}])
+            got = parse_findings(raw)
             if got:
                 return got, "model"
-        except Exception:
-            pass
+            note = f"model reply had no findings: {str(raw)[:200]!r}"
+        except Exception as exc:  # noqa: BLE001 - recorded, then the deterministic checks are used
+            note = f"model call failed: {str(exc)[:200]}"
+        issues_note.append(note)
     by_kind: dict[str, list] = {}
     for (k, t), it in issues.items():
         by_kind.setdefault(k, []).append(t)
@@ -280,11 +289,13 @@ def run_test(url: str, task: str, complete: Complete, personas: list[Persona], d
             raise RuntimeError(f"No one could start: {results[0]['reason'][:300]}")
         state.set(status="writing report")
         pmap = {p.id: p for p in personas}
+        notes: list = []
         found, source = findings(task, [r for r in results if r["status"] != "error"], pmap,
-                                 findings_complete or complete)
+                                 findings_complete or complete, notes)
         score = {v: {"passed": sum(r["status"] == "success" for r in results if r["variant"] == v),
                      "total": sum(1 for r in results if r["variant"] == v)} for v, _ in variants}
-        result = {**meta, "results": results, "findings": found, "findings_source": source, "score": score,
+        result = {**meta, "results": results, "findings": found, "findings_source": source,
+                  "findings_note": notes[0] if notes else "", "score": score,
                   "finished": time.time()}
         for r in results:
             r["summary"] = summarise(r) if r["status"] != "error" else f"Run stopped: {r['reason']}"
