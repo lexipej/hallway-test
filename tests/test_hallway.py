@@ -158,7 +158,8 @@ def test_full_run_writes_state_report_and_card(tmp_path):
     state = json.loads((run_dir / "state.json").read_text(encoding="utf-8"))
     assert state["status"] == "done" and state["score"]["after"]["passed"] == 2
     html = (run_dir / "report.html").read_text(encoding="utf-8")
-    assert "Replay all" in html and "data:image/jpeg;base64" in html and "<script" not in html
+    assert "Replay · " in html and "data:image/jpeg;base64" in html and "<script" not in html
+    assert "Maya" in html and "<svg" in html                                # people and condition icons
     assert (run_dir / "card.png").stat().st_size > 20000
 
 
@@ -251,7 +252,7 @@ def test_backend_routes(tmp_path, monkeypatch):
     c = TestClient(app)
     assert c.get("/runs").json()["runs"][0]["id"] == d.name
     one = c.get(f"/runs/{d.name}").json()
-    assert one["people"][0]["thumb"].startswith("data:image/jpeg;base64,")
+    assert one["people_live"][0]["thumb"].startswith("data:image/jpeg;base64,")
     assert c.get(f"/runs/{d.name}/report").status_code == 409
     assert c.get("/runs/..%2F..%2Fetc").status_code == 404
     (d / "report.html").write_text('<html><head><style>a{}</style><style id="ht-img">.iabcdef0123{background-image:url(data:image/jpeg;base64,QUJD)}</style></head><p>hi</p></html>')

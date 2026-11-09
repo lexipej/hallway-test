@@ -1,4 +1,8 @@
-"""Self-contained HTML report (replays included) and a 1200x675 summary card PNG."""
+"""Self-contained HTML report (replays included) and a 1200x675 summary card PNG.
+
+Visual language: a usability lab's session log. Ink on cool white, one ultramarine accent, square edges,
+hairlines, monospace for metadata. Pass/fail always carries a symbol as well as a colour.
+"""
 from __future__ import annotations
 
 import base64
@@ -8,61 +12,122 @@ import time
 from pathlib import Path
 from urllib.parse import urlparse
 
-STATUS = {"success": ("Finished", "ok"), "gave_up": ("Gave up", "bad"), "false_done": ("Thought they finished", "warn"),
-          "out_of_steps": ("Still stuck", "bad"), "error": ("Run error", "err")}
-HUES = {"first_timer": "#b4532a", "low_vision": "#7c5a2e", "keyboard": "#2f5d62", "colourblind": "#6b4c8a", "shaky": "#8a3b4f"}
+from .icons import icon
+
+ASSETS = Path(__file__).resolve().parent.parent / "assets"
+STATUS = {"success": ("Finished", "pass", "check"), "gave_up": ("Gave up", "fail", "cross"),
+          "false_done": ("False finish", "warn", "alert"), "out_of_steps": ("Stuck", "fail", "cross"),
+          "error": ("Run error", "muted", "alert")}
 SEV = {"blocker": "Blocker", "major": "Major", "minor": "Minor"}
 
-CSS = """
-*{box-sizing:border-box} body{margin:0;background:#f5f1ea;color:#2b231d;font:15px/1.5 ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif}
-.wrap{max-width:1180px;margin:0 auto;padding:36px 32px 60px}
-.kicker{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:#9a7b62;font-weight:600}
-h1{font:600 34px/1.15 Georgia,"Times New Roman",serif;margin:6px 0 8px;letter-spacing:-.01em}
-.task{font:italic 18px/1.4 Georgia,serif;color:#5b4a3d;margin:0 0 6px}
-.meta{font-size:13px;color:#8d7a6a}
-.score{display:flex;gap:18px;align-items:stretch;margin:26px 0 30px;flex-wrap:wrap}
-.big{background:#fffdf9;border:1px solid #e6dccf;border-radius:18px;padding:18px 24px;min-width:220px}
-.big .n{font:600 54px/1 Georgia,serif} .big .n small{font-size:26px;color:#9a8878}
-.big .l{font-size:13px;color:#8d7a6a;margin-top:6px} .arrow{align-self:center;font-size:28px;color:#b39b86}
-.dots{display:flex;gap:6px;margin-top:10px} .dot{width:14px;height:14px;border-radius:50%;background:#e6dccf}
-.dot.ok{background:#3f7d4e} .dot.bad{background:#c0532d} .dot.warn{background:#d39b2a}
-h2{font:600 22px Georgia,serif;margin:34px 0 14px}
-.find{display:grid;grid-template-columns:34px 1fr;gap:4px 14px;background:#fffdf9;border:1px solid #e6dccf;border-radius:16px;padding:16px 18px;margin-bottom:10px}
-.find .num{font:600 24px Georgia,serif;color:#b39b86} .find h3{margin:0;font-size:16px}
-.chip{display:inline-block;font-size:11px;font-weight:600;padding:2px 8px;border-radius:99px;margin-right:6px;vertical-align:2px}
-.blocker{background:#fbe1d6;color:#9b3412} .major{background:#fbedd0;color:#8a5a0b} .minor{background:#e9e4dc;color:#6b5b4d}
-.who{background:#efe6da;color:#5b4a3d;font-weight:500}
-.ev{color:#5b4a3d;font-size:14px;margin-top:4px} .fix{font-size:14px;margin-top:6px} .fix b{color:#3f7d4e}
-.cols{display:grid;gap:18px} .cols.two{grid-template-columns:1fr 1fr}
-.colh{font-size:13px;font-weight:600;color:#8d7a6a;text-transform:uppercase;letter-spacing:.1em;margin-bottom:10px}
-.card{background:#fffdf9;border:1px solid #e6dccf;border-radius:18px;padding:16px 18px;margin-bottom:14px;border-left-width:5px}
-.card.ok{border-left-color:#3f7d4e} .card.bad{border-left-color:#c0532d} .card.warn{border-left-color:#d39b2a} .card.err{border-left-color:#9a8878}
-.hd{display:flex;gap:12px;align-items:center} .av{width:42px;height:42px;border-radius:50%;color:#fff;display:flex;align-items:center;justify-content:center;font:600 15px Georgia,serif;flex:none}
-.nm{font-weight:600} .bl{font-size:12.5px;color:#8d7a6a;line-height:1.35}
-.badge{margin-left:auto;font-size:12px;font-weight:600;padding:4px 11px;border-radius:99px;white-space:nowrap}
-.ok .badge{background:#dcefdc;color:#2e6b3c} .bad .badge{background:#fbe1d6;color:#9b3412} .warn .badge{background:#fbedd0;color:#8a5a0b} .err .badge{background:#e9e4dc;color:#6b5b4d}
-blockquote{margin:12px 0 6px;font:17px/1.4 Georgia,serif;color:#3a2c22} blockquote:before{content:"\\201C";color:#c9b29c} blockquote:after{content:"\\201D";color:#c9b29c}
-.sum{font-size:13px;color:#7d6b5c}
-.film{display:flex;gap:6px;margin-top:10px} .film .im{width:58px;height:118px;border-radius:7px;border:1px solid #e6dccf;background-size:cover;background-position:top}
-details{margin-top:10px} summary{cursor:pointer;font-size:13px;font-weight:600;color:#8a5a3c}
-.steps{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-top:10px}
-.st{font-size:12px;color:#5b4a3d} .st .im{width:100%;aspect-ratio:420/860;border-radius:8px;border:1px solid #e6dccf;background-size:cover;background-position:top;position:relative}
-.st .im.desk{aspect-ratio:1280/800}
-.st .tap{position:absolute;width:22px;height:22px;margin:-11px 0 0 -11px;border-radius:50%;border:3px solid #e2572b;background:rgba(226,87,43,.25)}
-.st .act{font-family:ui-monospace,Consolas,monospace;font-size:11.5px;margin-top:4px;color:#2b231d}
-.st .th{font-style:italic;margin-top:2px} .st .dead{color:#c0532d;font-weight:600}
-.heat{position:relative;width:300px;border-radius:14px;overflow:hidden;border:1px solid #e6dccf}
-.heat .im{width:300px;aspect-ratio:420/860;background-size:cover;background-position:top}
+BASE_CSS = """
+:root{--ink:#0e1013;--ink2:#4a4f59;--ink3:#8a909b;--paper:#f6f7f9;--card:#fff;--rule:#dfe2e8;--blue:#2a3cff;
+--blue-soft:#e9ebff;--fail:#e5341d;--fail-soft:#fde9e6;--pass:#0f8a4f;--pass-soft:#e3f4ea;--warn:#b86e00;--warn-soft:#fff2db;
+--sans:"Inter","Segoe UI Variable Text","Segoe UI","Helvetica Neue",Arial,sans-serif;
+--mono:"JetBrains Mono","Cascadia Mono","SF Mono",Consolas,"Liberation Mono",monospace}
+*{box-sizing:border-box}
+.mono{font-family:var(--mono)}
+.label{font:600 11px/1 var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3)}
+.stamp{display:inline-flex;align-items:center;gap:5px;font:700 11px/1 var(--mono);letter-spacing:.06em;text-transform:uppercase;
+  padding:5px 7px;border:1.5px solid currentColor;white-space:nowrap}
+.stamp.pass{color:var(--pass);background:var(--pass-soft)} .stamp.fail{color:var(--fail);background:var(--fail-soft)}
+.stamp.warn{color:var(--warn);background:var(--warn-soft)} .stamp.muted{color:var(--ink3)}
+.cond{display:inline-flex;align-items:center;gap:6px;font:600 11px/1 var(--mono);letter-spacing:.05em;text-transform:uppercase;
+  color:var(--blue);background:var(--blue-soft);padding:5px 7px}
+.av{width:56px;height:56px;flex:none;background:var(--blue);color:#fff;display:flex;align-items:center;justify-content:center;
+  overflow:hidden;position:relative}
+.av img{width:100%;height:100%;object-fit:cover;display:block}
+.av .ini{font:800 20px var(--sans);letter-spacing:-.02em}
+"""
+
+CSS = BASE_CSS + """
+body{margin:0;background:var(--paper);color:var(--ink);font:15px/1.5 var(--sans)}
+.wrap{max-width:1180px;margin:0 auto;padding:0 32px 64px}
+.top{display:flex;gap:18px;flex-wrap:wrap;align-items:center;border-bottom:1.5px solid var(--ink);padding:18px 0 12px;margin-bottom:28px}
+.top .brand{font:800 13px var(--mono);letter-spacing:.12em;color:var(--ink)} .top .brand b{color:var(--blue)}
+.top .label{margin-left:auto}
+h1{font:800 44px/1.02 var(--sans);letter-spacing:-.035em;margin:0 0 16px;max-width:900px}
+.task{display:grid;grid-template-columns:90px 1fr;border:1.5px solid var(--ink);background:var(--card);max-width:900px}
+.task .label{padding:14px 12px;border-right:1.5px solid var(--ink);color:var(--ink)}
+.task p{margin:0;padding:12px 14px;font-size:16px}
+.meta{margin-top:10px;font:12px var(--mono);color:var(--ink3)}
+.score{display:grid;grid-template-columns:auto 1fr;gap:28px;margin:34px 0 8px;align-items:stretch}
+.nums{display:flex;align-items:flex-end;gap:16px}
+.num .n{font:800 92px/.9 var(--sans);letter-spacing:-.05em} .num .n small{font-size:40px;color:var(--ink3);letter-spacing:-.02em}
+.num .label{margin-top:10px} .arrow{font:300 52px/1 var(--sans);color:var(--ink3);padding-bottom:22px}
+table.matrix{border-collapse:collapse;width:100%;background:var(--card);border:1.5px solid var(--ink)}
+.matrix th{text-align:left;padding:9px 12px;border-bottom:1.5px solid var(--ink)}
+.matrix td{padding:8px 12px;border-bottom:1px solid var(--rule);vertical-align:middle}
+.matrix tr:last-child td{border-bottom:0}
+.who{display:flex;align-items:center;gap:10px;font-weight:700} .who .av{width:30px;height:30px} .who .av .ini{font-size:12px}
+.small{font:12px var(--mono);color:var(--ink3);margin-left:6px}
+h2{font:800 13px var(--mono);letter-spacing:.12em;text-transform:uppercase;margin:46px 0 14px;display:flex;align-items:center;gap:10px}
+h2:after{content:"";flex:1;height:1.5px;background:var(--ink)}
+.cols{display:grid;grid-template-columns:1fr 300px;gap:28px;align-items:start}
+.find{display:grid;grid-template-columns:64px 1fr;background:var(--card);border:1px solid var(--rule);border-left:4px solid var(--ink3);margin-bottom:10px}
+.find.blocker{border-left-color:var(--fail)} .find.major{border-left-color:var(--warn)}
+.find .id{padding:14px 0 0 14px;font:700 12px var(--mono);color:var(--ink3)}
+.find .body{padding:12px 16px 14px 0} .find h3{margin:0 0 6px;font:750 17px/1.3 var(--sans);letter-spacing:-.01em}
+.sev{font:700 10.5px var(--mono);letter-spacing:.08em;text-transform:uppercase;margin-right:8px;vertical-align:2px}
+.blocker .sev{color:var(--fail)} .major .sev{color:var(--warn)} .minor .sev{color:var(--ink3)}
+.tags{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 8px} .tags span{font:600 11px var(--mono);border:1px solid var(--rule);padding:3px 6px}
+.ev{color:var(--ink2);font-size:14px} .fix{font-size:14px;margin-top:8px;padding-left:10px;border-left:2px solid var(--blue)}
+.fix b{font:700 11px var(--mono);letter-spacing:.08em;color:var(--blue);margin-right:6px}
+.heat{position:relative;border:1.5px solid var(--ink);background:var(--card)} .heat .im{width:100%;aspect-ratio:420/860;background-size:cover;background-position:top}
 .heat .im.desk{aspect-ratio:1280/800}
-.heat i{position:absolute;width:26px;height:26px;margin:-13px 0 0 -13px;border-radius:50%;opacity:.55}
-.legend{display:flex;flex-wrap:wrap;gap:8px 14px;font-size:12px;color:#7d6b5c;margin-top:10px} .legend span:before{content:"";display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--c);margin-right:5px}
-.side{display:grid;grid-template-columns:1fr 300px;gap:28px;align-items:start}
-.foot{margin-top:40px;font-size:12px;color:#9a8878;border-top:1px solid #e6dccf;padding-top:14px}
+.heat i{position:absolute;width:22px;height:22px;margin:-11px 0 0 -11px;border-radius:50%;background:var(--blue);color:#fff;
+  font:700 10px/22px var(--mono);text-align:center;font-style:normal;box-shadow:0 0 0 2px #fff;opacity:.9}
+.note{font:12px var(--mono);color:var(--ink3);margin-top:8px}
+.grid2{display:grid;gap:16px} .grid2.two{grid-template-columns:1fr 1fr}
+.colh{font:700 12px var(--mono);letter-spacing:.1em;text-transform:uppercase;margin-bottom:10px}
+.subj{background:var(--card);border:1px solid var(--rule);margin-bottom:14px}
+.subj .hd{display:flex;gap:14px;align-items:flex-start;padding:14px;border-bottom:1px solid var(--rule)}
+.subj .nm{font:800 18px/1.15 var(--sans);letter-spacing:-.02em} .subj .bl{font-size:13px;color:var(--ink2);margin:4px 0 8px}
+.subj .st{margin-left:auto}
+.quote{margin:0;padding:14px 16px;font:600 17px/1.4 var(--sans);letter-spacing:-.01em;border-left:4px solid var(--blue);background:#fbfbfd}
+.sum{padding:8px 16px;font:12px var(--mono);color:var(--ink2);border-top:1px solid var(--rule)}
+.film{display:flex;gap:6px;padding:12px 16px;border-top:1px solid var(--rule)}
+.film .im{width:62px;height:126px;background-size:cover;background-position:top;border:1px solid var(--rule)}
+details{border-top:1px solid var(--rule)} summary{cursor:pointer;padding:10px 16px;font:700 12px var(--mono);letter-spacing:.06em;
+  text-transform:uppercase;color:var(--blue)}
+.steps{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;padding:4px 16px 16px}
+.st2{font-size:12.5px;color:var(--ink2)} .st2 .im{width:100%;aspect-ratio:420/860;background-size:cover;background-position:top;border:1px solid var(--rule);position:relative}
+.st2 .im.desk{aspect-ratio:1280/800}
+.st2 .tap{position:absolute;width:20px;height:20px;margin:-10px 0 0 -10px;border:2.5px solid var(--blue);border-radius:50%;background:rgba(42,60,255,.18)}
+.st2 .act{font:600 11.5px var(--mono);color:var(--ink);margin-top:5px} .st2 .th{margin-top:2px}
+.st2 .dead{font:700 11px var(--mono);color:var(--fail);margin-top:3px}
+.foot{margin-top:50px;border-top:1.5px solid var(--ink);padding-top:12px;font:12px/1.6 var(--mono);color:var(--ink3)}
 """
 
 
 def _esc(s) -> str:
     return html.escape(str(s or ""))
+
+
+def _avatar_b64(pid: str) -> str:
+    for ext in ("jpg", "png"):
+        p = ASSETS / "avatars" / f"{pid}.{ext}"
+        if p.exists():
+            return f"data:image/{'jpeg' if ext == 'jpg' else 'png'};base64," + base64.b64encode(p.read_bytes()).decode()
+    return ""
+
+
+def avatar(person: dict, cache: dict) -> str:
+    pid = person["id"]
+    if pid not in cache:
+        cache[pid] = _avatar_b64(pid)
+    src = cache[pid]
+    inner = f'<img src="{src}" alt="">' if src else f'<span class="ini">{_esc(person["initials"])}</span>'
+    return f'<div class="av">{inner}</div>'
+
+
+def cond(person: dict) -> str:
+    return f'<span class="cond">{icon(person["icon"], 14)}{_esc(person["condition"])}</span>'
+
+
+def stamp(status: str) -> str:
+    label, cls, ic = STATUS.get(status, STATUS["error"])
+    return f'<span class="stamp {cls}">{icon(ic, 12)}{label}</span>'
 
 
 class Images:
@@ -87,8 +152,22 @@ class Images:
         return "".join(f".i{k}{{background-image:url(data:image/jpeg;base64,{v})}}" for k, v in self.cls.items())
 
 
-def _card(r: dict, p, img: Images, desk: bool, vw: int, vh: int) -> str:
-    label, cls = STATUS[r["status"]]
+def _people(res: dict) -> dict:
+    """Person metadata by id (from the run; older runs fall back to the built-in list)."""
+    if res.get("people"):
+        return {p["id"]: p for p in res["people"]}
+    from .personas import PERSONAS
+    return {k: {"id": k, "name": p.name, "first": p.first_name, "initials": p.initials, "icon": p.icon,
+                "condition": p.condition, "blurb": p.blurb} for k, p in PERSONAS.items()}
+
+
+def _order(res: dict, variant: str) -> list:
+    order = res["personas_order"]
+    return sorted((r for r in res["results"] if r["variant"] == variant),
+                  key=lambda r: order.index(r["persona"]) if r["persona"] in order else 99)
+
+
+def _subject(r: dict, person: dict, img: Images, desk: bool, vw: int, vh: int, av: dict) -> str:
     steps = [s for s in r["steps"] if s.get("shot")]
     picks = steps[:: max(1, len(steps) // 4)][:4] if steps else []
     film = "".join(f'<div class="im {img(s["shot"])}"></div>' for s in picks)
@@ -100,78 +179,95 @@ def _card(r: dict, p, img: Images, desk: bool, vw: int, vh: int) -> str:
         if s.get("click"):
             x, y = s["click"]
             tap = f'<span class="tap" style="left:{x / vw * 100:.1f}%;top:{y / vh * 100:.1f}%"></span>'
-        dead = '<div class="dead">nothing happened</div>' if s.get("kind") == "click" and s.get("changed") is False else ""
+        dead = '<div class="dead">✕ nothing happened</div>' if s.get("kind") == "click" and s.get("changed") is False else ""
         err = f'<div class="dead">{_esc(s["error"][:90])}</div>' if s.get("error") else ""
-        rows.append(f'<div class="st"><div class="im {"desk " if desk else ""}{img(s.get("shot"))}">{tap}</div>'
-                    f'<div class="act">{s["i"] + 1}. {_esc(s["action"])}</div>'
+        rows.append(f'<div class="st2"><div class="im {"desk " if desk else ""}{img(s.get("shot"))}">{tap}</div>'
+                    f'<div class="act">{s["i"] + 1:02d} · {_esc(s["action"])}</div>'
                     + (f'<div class="th">{_esc(s["thought"])}</div>' if s.get("thought") else "") + dead + err + "</div>")
-    quote = f"<blockquote>{_esc(r['quote'])}</blockquote>" if r.get("quote") else ""
-    return (f'<div class="card {cls}"><div class="hd"><div class="av" style="background:{HUES.get(p.id, "#7c5a2e")}">'
-            f'{_esc(p.initials)}</div><div><div class="nm">{_esc(p.name)}</div><div class="bl">{_esc(p.blurb)}</div></div>'
-            f'<div class="badge">{label}</div></div>{quote}<div class="sum">{_esc(r.get("summary", ""))}</div>'
+    quote = f'<p class="quote">“{_esc(r["quote"])}”</p>' if r.get("quote") else ""
+    return (f'<div class="subj"><div class="hd">{avatar(person, av)}<div><div class="nm">{_esc(person["name"])}</div>'
+            f'<div class="bl">{_esc(person["blurb"])}</div>{cond(person)}</div><div class="st">{stamp(r["status"])}</div></div>'
+            f'{quote}<div class="sum">{_esc(r.get("summary", ""))} · {r.get("seconds", 0):.0f}s</div>'
             f'<div class="film">{film}</div>'
-            + (f'<details><summary>Replay all {len(r["steps"])} steps</summary><div class="steps">{"".join(rows)}</div></details>'
+            + (f'<details><summary>Replay · {len(r["steps"])} steps</summary><div class="steps">{"".join(rows)}</div></details>'
                if rows else "") + "</div>")
 
 
-def _score_block(res: dict) -> str:
+def _matrix(res: dict, people: dict, av: dict) -> str:
+    variants = res["variants"]
+    head = "".join(f'<th class="label">{"Result" if len(variants) == 1 else ("Before" if v == "before" else "After")}</th>'
+                   for v in variants)
+    rows = []
+    for r in _order(res, "before"):
+        person = people.get(r["persona"], {"id": r["persona"], "name": r["persona"], "initials": "?", "icon": "new", "condition": ""})
+        cells = []
+        for v in variants:
+            x = next((y for y in res["results"] if y["variant"] == v and y["persona"] == r["persona"]), None)
+            if x:
+                extra = f'{x["n_steps"]} steps' + (f' · {x["dead_clicks"]} dead taps' if x["dead_clicks"] else "")
+                cells.append(f'<td>{stamp(x["status"])}<span class="small">{extra}</span></td>')
+            else:
+                cells.append("<td></td>")
+        rows.append(f'<tr><td><div class="who">{avatar(person, av)}<span>{_esc(person.get("first") or person["name"])}</span>'
+                    f'</div></td><td>{cond(person)}</td>{"".join(cells)}</tr>')
+    return (f'<table class="matrix"><tr><th class="label">Person</th><th class="label">Condition</th>{head}</tr>'
+            f'{"".join(rows)}</table>')
+
+
+def _nums(res: dict) -> str:
     out = []
     for i, v in enumerate(res["variants"]):
         sc = res["score"][v]
-        dots = "".join(f'<span class="dot {STATUS[r["status"]][1]}"></span>'
-                       for r in sorted((r for r in res["results"] if r["variant"] == v),
-                                       key=lambda r: res["personas_order"].index(r["persona"])))
-        label = "people finished the task" if len(res["variants"]) == 1 else (
-            "finished · before" if v == "before" else "finished · after changes")
+        label = "finished" if len(res["variants"]) == 1 else ("before" if v == "before" else "after changes")
         if i:
             out.append('<div class="arrow">→</div>')
-        out.append(f'<div class="big"><div class="n">{sc["passed"]}<small>/{sc["total"]}</small></div>'
-                   f'<div class="l">{label}</div><div class="dots">{dots}</div></div>')
-    return "".join(out)
+        out.append(f'<div class="num"><div class="n">{sc["passed"]}<small>/{sc["total"]}</small></div>'
+                   f'<div class="label">{label}</div></div>')
+    return f'<div class="nums">{"".join(out)}</div>'
 
 
 def _findings(res: dict) -> str:
     if not res["findings"]:
-        return '<p class="meta">No barriers found for these people on this task.</p>'
+        return '<p class="note">No barriers found for these people on this task.</p>'
     out = []
     for n, f in enumerate(res["findings"], 1):
-        sev = f.get("severity", "major") if f.get("severity") in SEV else "major"
-        who = "".join(f'<span class="chip who">{_esc(w)}</span>' for w in f.get("who", []))
-        out.append(f'<div class="find"><div class="num">{n}</div><div><h3><span class="chip {sev}">{SEV[sev]}</span>'
-                   f'{_esc(f["title"])}</h3><div style="margin-top:4px">{who}</div><div class="ev">{_esc(f.get("evidence"))}</div>'
-                   f'<div class="fix"><b>Fix:</b> {_esc(f.get("fix"))}</div></div></div>')
+        sev = f.get("severity") if f.get("severity") in SEV else "major"
+        tags = "".join(f"<span>{_esc(w)}</span>" for w in f.get("who", []))
+        out.append(f'<div class="find {sev}"><div class="id">F-{n:02d}</div><div class="body"><h3><span class="sev">{SEV[sev]}</span>'
+                   f'{_esc(f["title"])}</h3>' + (f'<div class="tags">{tags}</div>' if tags else "")
+                   + f'<div class="ev">{_esc(f.get("evidence"))}</div><div class="fix"><b>FIX</b>{_esc(f.get("fix"))}</div></div></div>')
     return "".join(out)
 
 
 def build_html(res: dict, personas: dict, shots: Path, viewport=(420, 860)) -> str:
-    img = Images(shots)
+    img, av, people = Images(shots), {}, _people(res)
     vw, vh = viewport
     desk = vw > vh
     host = urlparse(res["url"]).netloc or res["url"]
     cols = []
     for v in res["variants"]:
-        cards = "".join(_card(r, personas[r["persona"]], img, desk, vw, vh)
-                        for r in sorted((r for r in res["results"] if r["variant"] == v),
-                                        key=lambda r: res["personas_order"].index(r["persona"])))
+        cards = "".join(_subject(r, people.get(r["persona"], {"id": r["persona"], "name": r["persona"], "initials": "?",
+                                                               "icon": "new", "condition": "", "blurb": ""}),
+                                 img, desk, vw, vh, av) for r in _order(res, v))
         head = "" if len(res["variants"]) == 1 else f'<div class="colh">{"Before" if v == "before" else "After changes"}</div>'
         cols.append(f"<div>{head}{cards}</div>")
-    before = [r for r in res["results"] if r["variant"] == "before" and r.get("first_shot")]
+    before = [r for r in _order(res, "before") if r.get("first_shot")]
     heat = ""
     if before:
         first = img(before[0]["first_shot"])
-        dots = "".join(f'<i style="left:{x / vw * 100:.1f}%;top:{y / vh * 100:.1f}%;background:{HUES.get(r["persona"], "#c0532d")}"></i>'
+        dots = "".join(f'<i style="left:{x / vw * 100:.1f}%;top:{y / vh * 100:.1f}%">{_esc(people.get(r["persona"], {}).get("initials", "?"))}</i>'
                        for r in before for x, y in r["first_screen_clicks"] if 0 <= y <= vh)
-        legend = "".join(f'<span style="--c:{HUES.get(r["persona"])}">{_esc(personas[r["persona"]].name.split(",")[0])}</span>'
-                         for r in before)
-        heat = (f'<div><h2 style="margin-top:0">Where people tapped first</h2><div class="heat"><div class="im {"desk " if desk else ""}{first}"></div>'
-                f'{dots}</div><div class="legend">{legend}</div></div>')
-    when = time.strftime("%d %b %Y, %H:%M", time.localtime(res.get("finished", time.time())))
-    body = f"""<div class="wrap"><div class="kicker">Hallway Test · usability report</div>
-<h1>{_esc(res.get('title') or host)}</h1><p class="task">“{_esc(res['task'])}”</p>
-<div class="meta">{len(res['personas_order'])} people · each in a real browser with their own limits enforced in code · {when} · {_esc(host)}</div>
-<div class="score">{_score_block(res)}</div>
-<div class="side"><div><h2 style="margin-top:0">What got in the way</h2>{_findings(res)}</div>{heat}</div>
-<h2>The people</h2><div class="cols {'two' if len(cols) > 1 else ''}">{''.join(cols)}</div>
+        heat = (f'<div><h2>First screen · taps</h2><div class="heat"><div class="im {"desk " if desk else ""}{first}"></div>{dots}</div>'
+                f'<div class="note">Each mark is one tap, labelled with the person’s initial.</div></div>')
+    when = time.strftime("%d %b %Y · %H:%M", time.localtime(res.get("finished", time.time())))
+    body = f"""<div class="wrap"><div class="top"><span class="brand">HALLWAY<b>/</b>TEST</span>
+<span class="label">Session {_esc(res.get('id', ''))}</span><span class="label">{when}</span></div>
+<h1>{_esc(res.get('title') or host)}</h1>
+<div class="task"><div class="label">Task</div><p>{_esc(res['task'])}</p></div>
+<div class="meta">{_esc(res['url'])} · {len(res['personas_order'])} people · real browsers · limits enforced in code</div>
+<div class="score">{_nums(res)}{_matrix(res, people, av)}</div>
+<div class="cols"><div><h2>What got in the way</h2>{_findings(res)}</div>{heat}</div>
+<h2>Sessions</h2><div class="grid2 {'two' if len(cols) > 1 else ''}">{''.join(cols)}</div>
 <div class="foot">Generated by Hallway Test for Hermes Agent. Perception (text size, contrast, colour vision, screen-reader
 access) and abilities (mouse, keyboard, tremor) are enforced by code; the model only decides what each person does next.
 Simulated people are not a substitute for testing with real users.</div></div>"""
@@ -180,53 +276,53 @@ Simulated people are not a substitute for testing with real users.</div></div>""
             f'<body>{body}</body></html>')
 
 
-CARD_CSS = """
-*{box-sizing:border-box}body{margin:0;width:1200px;height:675px;background:#f5f1ea;color:#2b231d;font:15px/1.45 ui-sans-serif,system-ui,"Segoe UI",sans-serif;overflow:hidden}
-.c{display:grid;grid-template-columns:560px 1fr;height:675px}
-.l{padding:48px 40px 40px 52px;display:flex;flex-direction:column}
-.k{font-size:13px;letter-spacing:.16em;text-transform:uppercase;color:#9a7b62;font-weight:700}
-h1{font:600 34px/1.15 Georgia,serif;margin:10px 0 8px} .t{font:italic 17px/1.4 Georgia,serif;color:#5b4a3d}
-.s{display:flex;align-items:center;gap:18px;margin:26px 0 22px} .n{font:600 76px/1 Georgia,serif} .n small{font-size:34px;color:#9a8878}
-.a{font-size:30px;color:#b39b86} .sl{font-size:13px;color:#8d7a6a;margin-top:4px}
-.f{font-size:14.5px;margin:0 0 9px;display:flex;gap:10px} .f b{font:600 15px Georgia,serif;color:#b39b86}
-.chip{font-size:10.5px;font-weight:700;padding:2px 7px;border-radius:99px;margin-right:6px;vertical-align:1px}
-.blocker{background:#fbe1d6;color:#9b3412}.major{background:#fbedd0;color:#8a5a0b}.minor{background:#e9e4dc;color:#6b5b4d}
-.r{background:#ece4d8;padding:30px 30px 30px 26px;display:flex;flex-direction:column;gap:10px;justify-content:center}
-.p{display:grid;grid-template-columns:46px 1fr;gap:12px;background:#fffdf9;border-radius:16px;padding:12px 14px;border-left:5px solid}
-.p.ok{border-color:#3f7d4e}.p.bad{border-color:#c0532d}.p.warn{border-color:#d39b2a}.p.err{border-color:#9a8878}
-.av{width:46px;height:46px;border-radius:50%;color:#fff;display:flex;align-items:center;justify-content:center;font:600 16px Georgia,serif}
-.nm{font-weight:600;font-size:14px}.st{font-size:11.5px;font-weight:700;margin-left:6px}.ok .st{color:#2e6b3c}.bad .st{color:#9b3412}.warn .st{color:#8a5a0b}
-.q{font:italic 14px/1.35 Georgia,serif;color:#4a3a2e;margin-top:2px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-.ft{margin-top:auto;font-size:12px;color:#9a8878}
-.ar{color:#b39b86;margin:0 2px 0 6px;font-size:12px}.okx{color:#2e6b3c!important}.badx{color:#9b3412!important}.warnx{color:#8a5a0b!important}.errx{color:#6b5b4d!important}
+CARD_CSS = BASE_CSS + """
+body{margin:0;width:1200px;height:675px;overflow:hidden;background:var(--paper);color:var(--ink);font:15px/1.4 var(--sans)}
+.c{display:grid;grid-template-columns:540px 1fr;height:675px}
+.l{padding:40px 40px 34px 48px;display:flex;flex-direction:column;border-right:1.5px solid var(--ink)}
+.brand{font:800 14px var(--mono);letter-spacing:.14em} .brand b{color:var(--blue)}
+h1{font:800 40px/1.02 var(--sans);letter-spacing:-.035em;margin:22px 0 14px}
+.task{font:13.5px/1.5 var(--mono);color:var(--ink2);border-left:3px solid var(--blue);padding-left:12px}
+.nums{display:flex;align-items:flex-end;gap:16px;margin-top:auto}
+.num .n{font:800 110px/.88 var(--sans);letter-spacing:-.055em} .num .n small{font-size:46px;color:var(--ink3)}
+.num .label{margin-top:10px} .arrow{font:300 56px/1 var(--sans);color:var(--ink3);padding-bottom:26px}
+.r{padding:34px 40px 30px 34px;display:flex;flex-direction:column;justify-content:center;gap:10px}
+.p{display:grid;grid-template-columns:56px 1fr auto;gap:14px;align-items:center;background:var(--card);border:1px solid var(--rule);padding:10px 12px 10px 10px}
+.p .nm{font:800 17px/1.1 var(--sans);letter-spacing:-.02em;margin-bottom:6px}
+.p .q{font:13px/1.35 var(--sans);color:var(--ink2);margin-top:6px;display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden}
+.res{display:flex;align-items:center;gap:6px} .res .to{font:300 18px var(--sans);color:var(--ink3)}
+.fx{margin-top:26px;display:grid;gap:8px} .fx div{font:600 14.5px/1.35 var(--sans);display:grid;grid-template-columns:86px 1fr;gap:10px}
+.fx span{font:700 10.5px/1.9 var(--mono);letter-spacing:.08em;text-transform:uppercase}
+.fx .blocker span{color:var(--fail)} .fx .major span{color:var(--warn)} .fx .minor span{color:var(--ink3)}
+.foot{font:11px var(--mono);color:var(--ink3);letter-spacing:.06em;text-transform:uppercase;margin-top:14px}
 """
+
+
+def _top_findings(res: dict) -> str:
+    items = [f for f in res.get("findings", []) if f.get("severity") in ("blocker", "major")][:2]
+    if not items:
+        return ""
+    return '<div class="fx">' + "".join(f'<div class="{f["severity"]}"><span>{SEV[f["severity"]]}</span>{_esc(f["title"])}</div>'
+                                        for f in items) + "</div>"
 
 
 def build_card(res: dict, personas: dict) -> str:
     host = urlparse(res["url"]).netloc or res["url"]
-    sc = res["score"]
-    score = f'<div><div class="n">{sc["before"]["passed"]}<small>/{sc["before"]["total"]}</small></div><div class="sl">{"before" if "after" in sc else "finished the task"}</div></div>'
-    if "after" in sc:
-        score += (f'<div class="a">→</div><div><div class="n">{sc["after"]["passed"]}<small>/{sc["after"]["total"]}</small></div>'
-                  f'<div class="sl">after changes</div></div>')
-    finds = "".join(f'<div class="f"><b>{i}</b><div><span class="chip {f.get("severity", "major")}">{SEV.get(f.get("severity"), "Major")}</span>'
-                    f'{_esc(f["title"])}</div></div>' for i, f in enumerate(res["findings"][:3], 1))
+    people, av = _people(res), {}
     rows = []
-    for r in sorted((r for r in res["results"] if r["variant"] == "before"), key=lambda r: res["personas_order"].index(r["persona"])):
-        p = personas[r["persona"]]
-        label, cls = STATUS[r["status"]]
+    for r in _order(res, "before")[:5]:
+        person = people.get(r["persona"], {"id": r["persona"], "name": r["persona"], "first": r["persona"], "initials": "?",
+                                           "icon": "new", "condition": ""})
         after = next((a for a in res["results"] if a["variant"] == "after" and a["persona"] == r["persona"]), None)
-        arrow = ""
-        if after:
-            al, ac = STATUS[after["status"]]
-            arrow = f'<span class="ar">→</span><span class="st {ac}x">{al}</span>'
-        rows.append(f'<div class="p {cls}"><div class="av" style="background:{HUES.get(p.id)}">{_esc(p.initials)}</div><div>'
-                    f'<div class="nm">{_esc(p.name)}<span class="st">{label}</span>{arrow}</div>'
-                    f'<div class="q">{"“" + _esc(r["quote"]) + "”" if r.get("quote") else _esc(r.get("summary"))}</div></div></div>')
+        res_html = stamp(r["status"]) if not after else f'{stamp(r["status"])}<span class="to">→</span>{stamp(after["status"])}'
+        q = f'<div class="q">“{_esc(r["quote"])}”</div>' if r.get("quote") and not after else ""
+        rows.append(f'<div class="p">{avatar(person, av)}<div><div class="nm">{_esc(person.get("first") or person["name"])}</div>'
+                    f'{cond(person)}{q}</div><div class="res">{res_html}</div></div>')
     return (f'<!doctype html><html><head><meta charset="utf-8"><style>{CARD_CSS}</style></head><body><div class="c"><div class="l">'
-            f'<div class="k">Hallway Test</div><h1>{_esc(res.get("title") or host)}</h1><div class="t">“{_esc(res["task"])}”</div>'
-            f'<div class="s">{score}</div>{finds}<div class="ft">Simulated people with enforced limits · Hermes Agent plugin</div>'
-            f'</div><div class="r">{"".join(rows)}</div></div></body></html>')
+            f'<div class="brand">HALLWAY<b>/</b>TEST</div><h1>{_esc(res.get("title") or host)}</h1>'
+            f'<div class="task">{_esc(res["task"])}</div>{_top_findings(res)}{_nums(res)}'
+            f'<div class="foot">Simulated people · real browsers · limits enforced in code</div></div>'
+            f'<div class="r">{"".join(rows)}</div></div></body></html>')
 
 
 def write_report(run_dir: Path, res: dict, personas: dict, viewport=(420, 860)) -> dict:

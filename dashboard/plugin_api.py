@@ -39,6 +39,15 @@ def _b64(p: Path, mime: str) -> str:
     return f"data:{mime};base64," + base64.b64encode(p.read_bytes()).decode() if p.exists() else ""
 
 
+_AVATARS = Path(__file__).resolve().parent.parent / "assets" / "avatars"
+
+
+@router.get("/avatars")
+async def avatars():
+    """The built-in people's portraits as data URLs, keyed by persona id."""
+    return {p.stem: _b64(p, "image/jpeg") for p in sorted(_AVATARS.glob("*.jpg"))}
+
+
 @router.get("/runs")
 async def runs():
     d = _runs_dir()
@@ -58,7 +67,7 @@ async def run(run_id: str):
     for key, p in s.get("personas", {}).items():
         shot = p.get("shot")
         people.append({**p, "key": key, "thumb": _b64(d / "shots" / shot, "image/jpeg") if shot else ""})
-    s["people"] = people
+    s["people_live"] = people
     s.pop("personas", None)
     return s
 

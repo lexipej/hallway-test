@@ -1,5 +1,7 @@
 # Hallway Test
 
+![Five simulated testers: Maya, Walter, Jordan, Ryan and Nina](assets/group.jpg)
+
 **Watch five simulated people try your web page, each with real limits.**
 
 You change a page, then ask Hermes: *"hallway test localhost:3000/signup — sign up with sam@example.com"*.
@@ -7,11 +9,15 @@ Five people open it in their own browsers and try:
 
 | Person | Limit, enforced in code |
 |---|---|
-| **Mara**, first-time visitor | Reads labels literally; nothing hidden is assumed |
-| **Lolo Ben**, 72, low vision | Text under 13.5px or below 3:1 contrast is unreadable to him |
-| **Jo**, screen-reader user | Blind: hears only the accessibility tree; Tab, Enter, Space and arrows only |
-| **Rafael**, red-green colour blind | Reds and greens are reported to him as "brownish" |
-| **Aling Nena**, hand tremor | Every tap lands up to 9px off target |
+| **Maya**, first-time visitor | Reads labels literally; nothing hidden is assumed |
+| **Walter**, 72, low vision | Text under 13.5px or below 3:1 contrast is unreadable to him |
+| **Jordan**, screen-reader user | Blind: hears only the accessibility tree; Tab, arrows, Enter and Space only |
+| **Ryan**, red-green colour blind | Reds and greens are reported to him as "brownish" |
+| **Nina**, hand tremor | Every tap lands up to 9px off target |
+
+Add your own people too (up to 8 per run): *"also add Priya, 80, who uses only the keyboard and needs large text"*
+becomes a custom person built from the same enforced limits (`low_vision`, `screen_reader`, `keyboard_only`,
+`colour_blind`, `tremor`).
 
 The model never pretends to have these limits. The plugin decides what each person can perceive (from computed
 font sizes, contrast ratios, colours and the accessibility tree) and what they can do (mouse or keyboard, tap
@@ -20,15 +26,15 @@ the results are real barriers and not role-play.
 
 You get back:
 
-- **Who finished and who gave up**, in their own words ("I can't read the buttons and nothing tells me what's wrong").
+- **Who finished and who gave up**, in their own words ("I can't tell which seats are free, they all look brown").
 - **Taps that did nothing** and **false finishes** (someone thought they were done but the task wasn't complete).
 - **3–5 prioritised findings**, each with who it blocked, evidence from the run, and a specific fix.
 - **A full HTML report** with step-by-step replays (every screen as that person saw it, where they tapped, what they thought).
 - **A 1200×675 summary card** to drop in a PR or a post.
-- **Before/after**: pass `compare_url` to run the same people on your fix and see 2/5 → 5/5.
+- **Before/after**: pass `compare_url` to run the same people on your fix and see 1/5 → 5/5.
 
-In Hermes Desktop, the **Hallway Test** page in the sidebar follows a run live (each person's current screen and
-thought) and shows finished reports.
+In Hermes Desktop, the **Hallway Test** page in the sidebar follows a run live, like a usability lab's monitor wall
+(each person's current screen and thought), and shows finished reports.
 
 ## Try it in 30 seconds
 
@@ -40,8 +46,10 @@ Restart Hermes (in Desktop: Capabilities → Plugins → Rescan, turn on **Hallw
 
 > Run a hallway test on the demo, before and after fixes.
 
-or type `/hallway demo`. The demo is a small coffee-ordering app bundled with the plugin (`url: "demo"`) and its
-repaired version (`"demo:fixed"`). It is served on `127.0.0.1` only.
+or type `/hallway demo`. The demo is **Pier 9 Live**, a small concert seat picker bundled with the plugin (`url: "demo"`),
+and its repaired version (`"demo:fixed"`). On the broken one each person hits a different wall: seats shown only in
+red and green, 14px seats packed tightly, seats that aren't real buttons, faint row letters. It is served on
+`127.0.0.1` only.
 
 ## Using it on your own pages
 
@@ -54,6 +62,7 @@ Ask Hermes in plain words, or call the `hallway_test` tool:
 | `success_text` | Text that only appears when the task is done. Strongly recommended: success is then verified, not self-reported |
 | `compare_url` | Optional second version for before/after |
 | `personas` | Optional subset, e.g. `["keyboard", "low_vision"]` |
+| `custom_personas` | Up to 3 extra people: `{name, about, traits}` with traits from `low_vision`, `screen_reader`, `keyboard_only`, `colour_blind`, `tremor` |
 | `facts` | Test credentials and other things the people know |
 | `device` | `mobile` (default, 420×860) or `desktop` (1280×800) |
 
@@ -103,4 +112,5 @@ python -m pytest -q
 
 The tests use the bundled demo and a rule-based stand-in for the model, so they run offline.
 
-Built with AI assistance (Claude) for the Nous Research Hermes Agent plugin hackathon. MIT licensed.
+Built with AI assistance (Claude, Codex) for the Nous Research Hermes Agent plugin hackathon. The portraits were made with
+Codex image generation and recoloured for the report. MIT licensed.
