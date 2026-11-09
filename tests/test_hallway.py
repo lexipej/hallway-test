@@ -1,4 +1,4 @@
-"""Hallway Test checks. Browser tests use the bundled demo app and Playwright's Chromium."""
+"""Hallway Test checks using the bundled demo and the production browser launcher."""
 import importlib.util
 import json
 import random
@@ -16,6 +16,7 @@ sys.path.insert(0, str(ROOT / "tests"))
 from ht import browser as B, demo  # noqa: E402
 from ht.brain import Brain, parse_findings, parse_reply  # noqa: E402
 from ht.personas import PERSONAS, pick  # noqa: E402
+from ht.run import launch  # noqa: E402
 
 import fake_brain  # noqa: E402
 
@@ -57,7 +58,7 @@ def test_brain_prompt_carries_persona_limits():
 def pw():
     sync_api = pytest.importorskip("playwright.sync_api")
     with sync_api.sync_playwright() as p:
-        br = p.chromium.launch()
+        br = launch(p)
         yield br
         br.close()
 
