@@ -267,7 +267,7 @@ def test_all_model_errors_are_reported_not_scored(tmp_path, monkeypatch):
     ctx = FakeCtx(broken)
     mod.register(ctx)
     out = json.loads(ctx.tools["hallway_test"][1]({"url": "demo", "personas": ["first_timer"], "max_steps": 4}))
-    assert not out["ok"] and "429" in out["error"] and "hermes model" in out["error"]
+    assert not out["ok"] and "429" in out["error"] and "Auxiliary models" in out["error"]
     state = json.loads(next((tmp_path / "runs").glob("*/state.json")).read_text(encoding="utf-8"))
     assert state["status"] == "error" and "429" in state["error"]
 
@@ -402,3 +402,23 @@ def test_long_pages_tell_people_where_they_are(pw, tmp_path):
     B.act(pg, p, obs, "scroll to top", random.Random(1))
     assert "top of the page" in B.observe(pg, p)["text"]
     pg.close()
+
+
+class AuxCtx(FakeCtx):
+    def __init__(self, reply):
+        super().__init__(reply)
+        self.aux = {}
+
+    def register_auxiliary_task(self, key, **kw):
+        self.aux[key] = kw
+
+
+def test_personas_use_the_plugins_own_auxiliary_task(tmp_path, monkeypatch):
+    pytest.importorskip("playwright.sync_api")
+    mod = _load_plugin()
+    monkeypatch.setattr(mod, "_data_dir", lambda: tmp_path)
+    ctx = AuxCtx(_per_thread_brain())
+    mod.register(ctx)
+    assert "hallway_test" in ctx.aux and "Auxiliary" not in ctx.aux["hallway_test"]["display_name"]
+    out = json.loads(ctx.tools["hallway_test"][1]({"url": "demo", "personas": ["first_timer"], "max_steps": 12}))
+    assert out["ok"] and ctx.calls and all(c.get("task") == "hallway_test" for c in ctx.calls)

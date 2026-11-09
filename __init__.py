@@ -58,13 +58,24 @@ def _data_dir() -> Path:
     return plugin_data_dir(PLUGIN)
 
 
+AUX_TASK = "hallway_test"
+_aux = {"registered": False}
+
+
 def _make_complete(ctx, max_tokens: int, timeout: float = 90):
     def complete(messages: list[dict]) -> str:
         last = None
         for _ in range(2):  # one retry for a transient provider error
             try:
-                res = ctx.llm.complete(messages, temperature=0.4,
-                                       max_tokens=max_tokens, timeout=timeout, purpose="hallway-test persona step")
+                kw = dict(temperature=0.4, max_tokens=max_tokens, timeout=timeout, purpose="hallway-test persona step")
+                if _aux["registered"]:
+                    # Our own auxiliary task: the user can point it at any model in Settings > Model >
+                    # Auxiliary models. Unset, it follows Hermes's main model.
+                    try:
+                        return ctx.llm.complete(messages, task=AUX_TASK, **kw).text
+                    except TypeError:  # older Hermes without task routing
+                        _aux["registered"] = False
+                res = ctx.llm.complete(messages, **kw)
                 return res.text
             except Exception as exc:  # noqa: BLE001 - surfaced after the retry
                 last = exc
@@ -103,8 +114,9 @@ def _run(ctx, args, url, is_demo, compare, task, success, viewport, max_steps, t
                     time_budget=float(ctx.get_config("time_budget_seconds", 330)))
 
 
-MODEL_HINT = ("Hallway Test uses Hermes's default model (the one `hermes model` saves), not the model picked in a "
-              "single chat. Check that model works, then run the test again.")
+MODEL_HINT = ("Hallway Test uses the model set for 'Hallway Test people' in Settings > Model > Auxiliary models "
+              "(Auto = Hermes's main model from `hermes model`, not the model picked in a single chat). Check that "
+              "model works, then run the test again.")
 
 
 def check_model_errors(res: dict) -> None:
@@ -131,6 +143,14 @@ def tool_summary(res: dict) -> dict:
 
 
 def register(ctx) -> None:
+    try:
+        ctx.register_auxiliary_task(
+            AUX_TASK, display_name="Hallway Test people",
+            description="Model the five simulated people (and the findings writer) use. A run makes about "
+                        "40-150 short calls, so a fast, inexpensive model works well. Auto = your main model.")
+        _aux["registered"] = True
+    except Exception:  # noqa: BLE001 - older Hermes: fall back to the main model
+        _aux["registered"] = False
     def handler(args: dict, **_kw) -> str:
         try:
             return json.dumps(tool_summary(run_tool(ctx, args or {})), ensure_ascii=False)

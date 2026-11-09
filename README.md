@@ -59,8 +59,12 @@ Ask Hermes in plain words, or call the `hallway_test` tool:
 
 ## Requirements and settings
 
-- Hermes 0.23 or newer. Persona decisions use **Hermes's default model** through `ctx.llm` (set it with `hermes model`;
-  the model picked inside one chat does not apply); no extra API keys. A fast, cheap model works well.
+- Hermes 0.23 or newer. No extra API keys: the people run on a model you already have in Hermes.
+- **Choosing the model.** Hallway Test registers its own model slot, **Hallway Test people**, under
+  Settings → Model → Auxiliary models (or `auxiliary.hallway_test` in `config.yaml`). Left on Auto it uses your main
+  Hermes model. A run makes 40-150 short calls, so pointing it at a fast, inexpensive model (a "flash" or "mini"
+  model) keeps runs quick and cheap while your chat stays on whatever model you like. The model picked inside a
+  single chat does not change it.
 - Python dependency: `playwright` (installed with the plugin). For the browser it uses Playwright's Chromium if
   present, otherwise the Microsoft Edge or Google Chrome already on your machine. It never downloads a browser
   itself; to use Playwright's Chromium, run `python -m playwright install chromium` in the Hermes environment.
