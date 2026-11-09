@@ -113,4 +113,5 @@ python -m pytest -q
 The tests use the bundled demo and a rule-based stand-in for the model, so they run offline.
 
 Built with AI assistance (Claude, Codex) for the Nous Research Hermes Agent plugin hackathon. The portraits were made with
-Codex image generation and recoloured for the report. MIT licensed.
+Codex image generation and recoloured for the report. Report typefaces: Barlow Condensed and Space Mono, both under the
+SIL Open Font License 1.1 (licences in `assets/fonts/`). Plugin code: MIT licensed.

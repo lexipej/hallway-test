@@ -20,78 +20,114 @@ STATUS = {"success": ("Finished", "pass", "check"), "gave_up": ("Gave up", "fail
           "error": ("Run error", "muted", "alert")}
 SEV = {"blocker": "Blocker", "major": "Major", "minor": "Minor"}
 
+GRAIN = ("url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'>"
+         "<filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/>"
+         "<feColorMatrix values='0 0 0 0 .12 0 0 0 0 .17 0 0 0 0 .9 0 0 0 .045 0'/></filter>"
+         "<rect width='100%' height='100%' filter='url(%23n)'/></svg>\")")
+
 BASE_CSS = """
-:root{--ink:#111316;--ink2:#555b66;--ink3:#8d939d;--paper:#fafafa;--rule:#e7e8ec;--blue:#2a3cff;--blue-soft:#f1f2ff;
---fail:#d93a24;--pass:#13834f;--warn:#b26a00;
---sans:"Inter","Segoe UI Variable Text","Segoe UI","Helvetica Neue",Arial,sans-serif;
---mono:"JetBrains Mono","Cascadia Mono","SF Mono",Consolas,"Liberation Mono",monospace}
+:root{--blue:#1e2ce6;--navy:#171a3d;--ink2:#4b4f72;--ink3:#8a8daa;--pink:#ff4f9a;--pink-soft:#ffe3ef;--yellow:#ffd23f;
+--paper:#f6f7f9;--rule:#d9dbec;--tint:#e9ebff;
+--head:"Barlow Condensed","Bahnschrift","Arial Narrow",sans-serif;--mono:"Space Mono","Cascadia Mono",Consolas,monospace;
+--sans:"Inter","Segoe UI Variable Text","Segoe UI","Helvetica Neue",Arial,sans-serif}
 *{box-sizing:border-box}
-.label{font:600 11px/1 var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3)}
-.st{display:inline-flex;align-items:center;gap:5px;font:600 13px/1 var(--sans);white-space:nowrap}
-.st.pass{color:var(--pass)} .st.fail{color:var(--fail)} .st.warn{color:var(--warn)} .st.muted{color:var(--ink3)}
-.cond{display:inline-flex;align-items:center;gap:5px;font:13px/1.2 var(--sans);color:var(--ink3)}
-.av{width:40px;height:40px;flex:none;border-radius:50%;background:var(--blue);color:#fff;display:flex;align-items:center;
-  justify-content:center;overflow:hidden}
+.label{font:700 11px/1 var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--ink3)}
+.st{display:inline-flex;align-items:center;gap:5px;font:700 12px/1 var(--mono);letter-spacing:.04em;text-transform:uppercase;
+  padding:5px 8px 4px;border:2px solid currentColor;white-space:nowrap;transform:rotate(-1.2deg)}
+.st.pass{color:var(--blue)} .st.fail{color:var(--pink);background:var(--pink-soft)} .st.warn{color:#a77a00;background:#fff4c9}
+.st.muted{color:var(--ink3)}
+.cond{display:inline-flex;align-items:center;gap:5px;font:700 11px/1.2 var(--mono);letter-spacing:.03em;text-transform:uppercase;color:var(--blue)}
+.av{width:44px;height:44px;flex:none;background:var(--blue);color:#fff;display:flex;align-items:center;justify-content:center;
+  overflow:hidden;box-shadow:3px 3px 0 var(--pink)}
 .av img{width:100%;height:100%;object-fit:cover;display:block}
-.av .ini{font:700 15px var(--sans)}
+.av .ini{font:800 20px var(--head)}
+.dots{background-image:radial-gradient(var(--blue) 28%,transparent 31%);background-size:7px 7px}
 """
 
 CSS = BASE_CSS + """
-body{margin:0;background:var(--paper);color:var(--ink);font:15px/1.6 var(--sans)}
+body{margin:0;background:var(--paper) """ + GRAIN + """;color:var(--navy);font:15px/1.6 var(--sans)}
+.mast{border-bottom:3px solid var(--blue)}
+.mast .bar{display:flex;gap:16px;max-width:1000px;margin:0 auto;padding:18px 32px;font:700 12px var(--mono);color:var(--blue);
+  letter-spacing:.06em;text-transform:uppercase}
+.mast .bar .when{margin-left:auto}
+.mast .pic{height:250px;overflow:hidden}
+.mast img{display:block;width:100%;height:100%;object-fit:cover;object-position:50% 30%;mix-blend-mode:multiply}
 .wrap{max-width:1000px;margin:0 auto;padding:0 32px 80px}
-.top{display:flex;gap:16px;align-items:center;padding:22px 0;color:var(--ink3);font:12px var(--mono)}
-.top .brand{font:700 12px var(--mono);letter-spacing:.14em;color:var(--ink)} .top .brand b{color:var(--blue)}
-.top .when{margin-left:auto}
-h1{font:800 40px/1.08 var(--sans);letter-spacing:-.03em;margin:18px 0 10px}
-.task{margin:0;font-size:18px;color:var(--ink2);max-width:760px} .meta{margin-top:8px;font:12px var(--mono);color:var(--ink3)}
+.kick{display:inline-block;margin-top:34px;font:700 12px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:#fff;
+  background:var(--blue);padding:5px 9px 4px}
+h1{font:800 64px/.95 var(--head);letter-spacing:-.01em;text-transform:uppercase;color:var(--blue);margin:14px 0 14px;max-width:900px}
+.task{margin:0;font-size:18px;color:var(--navy);max-width:760px}
+.meta{margin-top:10px;font:12px var(--mono);color:var(--ink3)}
 .hero{display:grid;grid-template-columns:auto 1fr;gap:56px;align-items:center;margin:48px 0 8px}
 .nums{display:flex;align-items:flex-end;gap:14px}
-.num .n{font:800 84px/.9 var(--sans);letter-spacing:-.05em} .num .n small{font-size:34px;color:var(--ink3);letter-spacing:-.02em}
-.num .label{margin-top:10px} .arrow{font:300 44px/1 var(--sans);color:var(--ink3);padding-bottom:20px}
-.fr{margin-top:14px;font:12px var(--mono);color:var(--ink3)} .fr b{color:var(--ink);font-weight:600}
-.glance{margin:0;padding:0;list-style:none;font-size:17px;line-height:1.5}
-.glance li{padding:6px 0 6px 18px;position:relative} .glance li:before{content:"";position:absolute;left:0;top:16px;width:6px;height:6px;background:var(--blue);border-radius:50%}
-h2{font:700 13px var(--sans);letter-spacing:.02em;color:var(--ink3);margin:64px 0 14px;text-transform:none}
+.num .n{font:800 120px/.82 var(--head);color:var(--blue);text-shadow:4px 3px 0 rgba(255,79,154,.85)}
+.num .n small{font-size:52px;color:var(--ink3);text-shadow:none}
+.num .label{margin-top:12px} .arrow{font:700 54px/1 var(--head);color:var(--pink);padding-bottom:30px}
+.fr{margin-top:16px;font:12px var(--mono);color:var(--ink2)} .fr b{color:var(--blue)}
+.glance{margin:0;padding:0;list-style:none;font-size:17px;line-height:1.45}
+.glance li{padding:7px 0 7px 22px;position:relative} .glance li:before{content:"";position:absolute;left:0;top:15px;width:10px;height:10px;background:var(--pink)}
+h2{display:flex;align-items:center;gap:14px;font:800 28px/1 var(--head);text-transform:uppercase;color:var(--blue);margin:70px 0 18px}
+h2:after{content:"";flex:1;height:10px;background-image:radial-gradient(var(--blue) 28%,transparent 31%);background-size:7px 7px;opacity:.55}
 table.res{border-collapse:collapse;width:100%}
-.res th{text-align:left;font:600 11px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);padding:0 0 10px}
-.res td{padding:12px 16px 12px 0;border-top:1px solid var(--rule);vertical-align:middle}
-.who{display:flex;align-items:center;gap:12px} .who .av{width:32px;height:32px} .who .av .ini{font-size:12px}
-.who b{font-weight:650}
-.sub{display:block;font:12px var(--mono);color:var(--ink3);margin-top:3px}
-.find{padding:26px 0;border-top:1px solid var(--rule);max-width:780px}
-.fmeta{display:flex;align-items:center;gap:8px;font:12.5px var(--sans);color:var(--ink3)}
-.dot{width:8px;height:8px;border-radius:50%;background:var(--ink3)} .blocker .dot{background:var(--fail)} .major .dot{background:var(--warn)}
-.sevw{font-weight:650} .blocker .sevw{color:var(--fail)} .major .sevw{color:var(--warn)}
-.find h3{margin:6px 0 6px;font:700 20px/1.3 var(--sans);letter-spacing:-.015em}
-.what{margin:0 0 8px;font-size:15.5px;color:var(--ink)}
+.res th{text-align:left;font:700 11px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--ink3);padding:0 0 10px}
+.res td{padding:14px 16px 14px 0;border-top:1.5px dashed var(--rule);vertical-align:middle}
+.who{display:flex;align-items:center;gap:14px} .who b{font:800 21px/1 var(--head);text-transform:uppercase;letter-spacing:.01em}
+.sub{display:block;font:11.5px var(--mono);color:var(--ink3);margin-top:6px}
+.find{display:grid;grid-template-columns:70px 1fr;padding:26px 0;border-top:1.5px dashed var(--rule);max-width:820px}
+.fnum{font:800 46px/.9 var(--head);color:var(--blue);text-shadow:3px 2px 0 rgba(255,79,154,.8)}
+.fmeta{display:flex;align-items:center;gap:10px;font:700 11.5px var(--mono);text-transform:uppercase;letter-spacing:.04em;color:var(--ink3)}
+.mark{padding:3px 7px 2px;color:var(--navy)} .blocker .mark{background:var(--pink);color:#fff} .major .mark{background:var(--yellow)}
+.minor .mark{border:1.5px solid var(--ink3);color:var(--ink2)}
+.find h3{margin:10px 0 6px;font:800 26px/1.05 var(--head);text-transform:uppercase;color:var(--navy)}
+.what{margin:0 0 8px;font-size:15.5px}
 .ev{margin:0 0 14px;padding-left:18px;color:var(--ink2);font-size:14px} .ev li{margin:2px 0}
-.fix{background:var(--blue-soft);padding:14px 18px;border-radius:6px}
-.fix .label{color:var(--blue)} .fix ol{margin:8px 0 0;padding-left:18px;font-size:14.5px} .fix li{margin:3px 0}
-.people{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:20px}
-.colh{font:600 13px var(--sans);color:var(--ink3);margin:0 0 10px}
-.subj{background:#fff;border-radius:10px;padding:18px;box-shadow:0 1px 0 var(--rule),0 0 0 1px var(--rule)}
-.subj .hd{display:flex;gap:12px;align-items:center}
-.subj .nm{font:700 16px/1.2 var(--sans)} .subj .hd .st{margin-left:auto}
-.quote{margin:14px 0 0;font:500 16px/1.45 var(--sans);color:var(--ink)}
-.sum{margin-top:8px;font:12px var(--mono);color:var(--ink3)}
+.fix{position:relative;background:var(--tint);padding:14px 18px 14px;overflow:hidden}
+.fix:after{content:"";position:absolute;right:-10px;top:-10px;width:140px;height:90px;background-image:radial-gradient(var(--blue) 28%,transparent 31%);
+  background-size:7px 7px;opacity:.35;-webkit-mask-image:linear-gradient(225deg,#000,transparent 70%);mask-image:linear-gradient(225deg,#000,transparent 70%)}
+.fix .label{color:var(--blue);font-size:12px} .fix ol{position:relative;margin:8px 0 0;padding-left:20px;font-size:14.5px;color:var(--navy)} .fix li{margin:3px 0}
+.people{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:22px}
+.subj{background:#fff;padding:18px;border:2px solid var(--navy);box-shadow:5px 5px 0 var(--blue)}
+.subj .hd{display:flex;gap:14px;align-items:center} .subj .av{width:64px;height:64px}
+.subj .nm{font:800 26px/1 var(--head);text-transform:uppercase;margin-bottom:6px} .subj .hd .st{margin-left:auto}
+.quote{position:relative;margin:16px 0 0;padding-left:26px;font:500 16px/1.45 var(--sans)}
+.quote:before{content:"“";position:absolute;left:0;top:-14px;font:800 48px/1 var(--head);color:var(--pink)}
+.sum{margin-top:8px;font:11.5px var(--mono);color:var(--ink3)}
 .film{display:flex;gap:6px;margin-top:14px}
-.film .im{width:52px;height:106px;background-size:cover;background-position:top;border-radius:4px;box-shadow:0 0 0 1px var(--rule)}
-details{margin-top:12px} summary{cursor:pointer;font:600 13px var(--sans);color:var(--blue)}
+.film .im{width:52px;height:106px;background-size:cover;background-position:top;border:1.5px solid var(--navy)}
+details{margin-top:12px} summary{cursor:pointer;font:700 12px var(--mono);letter-spacing:.04em;text-transform:uppercase;color:var(--blue)}
 .steps{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:12px;margin-top:12px}
-.st2{font-size:12.5px;color:var(--ink2)} .st2 .im{width:100%;aspect-ratio:420/860;background-size:cover;background-position:top;border-radius:4px;box-shadow:0 0 0 1px var(--rule);position:relative}
+.st2{font-size:12.5px;color:var(--ink2)} .st2 .im{width:100%;aspect-ratio:420/860;background-size:cover;background-position:top;border:1.5px solid var(--navy);position:relative}
 .st2 .im.desk{aspect-ratio:1280/800}
-.st2 .tap{position:absolute;width:18px;height:18px;margin:-9px 0 0 -9px;border:2px solid var(--blue);border-radius:50%;background:rgba(42,60,255,.15)}
-.st2 .act{font:500 11.5px var(--mono);color:var(--ink);margin-top:6px} .st2 .th{margin-top:2px}
-.st2 .dead{font:600 11px var(--mono);color:var(--fail);margin-top:3px}
-.aft summary{font-size:14px}
-.appx{margin-top:56px;border-top:1px solid var(--rule);padding-top:18px}
-.appx summary{color:var(--ink3)} .heat{position:relative;width:280px;margin-top:14px;border-radius:6px;overflow:hidden;box-shadow:0 0 0 1px var(--rule)}
+.st2 .tap{position:absolute;width:18px;height:18px;margin:-9px 0 0 -9px;border:2.5px solid var(--pink);border-radius:50%;background:rgba(255,79,154,.2)}
+.st2 .act{font:700 11px var(--mono);color:var(--navy);margin-top:6px} .st2 .th{margin-top:2px}
+.st2 .dead{font:700 11px var(--mono);color:var(--pink);margin-top:3px}
+.aft summary{font-size:13px}
+.appx{margin-top:56px;padding-top:18px;border-top:1.5px dashed var(--rule)}
+.heat{position:relative;width:280px;margin-top:14px;border:2px solid var(--navy)}
 .heat .im{width:100%;aspect-ratio:420/860;background-size:cover;background-position:top} .heat .im.desk{aspect-ratio:1280/800}
-.heat i{position:absolute;width:20px;height:20px;margin:-10px 0 0 -10px;border-radius:50%;background:var(--blue);color:#fff;
-  font:700 9.5px/20px var(--mono);text-align:center;font-style:normal;box-shadow:0 0 0 2px #fff}
+.heat i{position:absolute;width:22px;height:22px;margin:-11px 0 0 -11px;border-radius:50%;background:var(--pink);color:#fff;
+  font:700 10px/22px var(--mono);text-align:center;font-style:normal;box-shadow:0 0 0 2px #fff}
 .note{font-size:13px;color:var(--ink3)}
-.foot{margin-top:56px;font-size:12.5px;color:var(--ink3);max-width:720px}
+.foot{margin-top:56px;font:12px/1.6 var(--mono);color:var(--ink3);max-width:760px}
 """
+
+
+def fonts_css() -> str:
+    """The two print typefaces (SIL OFL), embedded so the report looks the same on every machine."""
+    out = []
+    for fam, file, weight in (("Barlow Condensed", "barlow-condensed-latin-700-normal", 700),
+                              ("Barlow Condensed", "barlow-condensed-latin-800-normal", 800),
+                              ("Space Mono", "space-mono-latin-400-normal", 400), ("Space Mono", "space-mono-latin-700-normal", 700)):
+        p = ASSETS / "fonts" / f"{file}.woff2"
+        if p.exists():
+            out.append(f"@font-face{{font-family:'{fam}';font-weight:{weight};font-style:normal;font-display:block;"
+                       f"src:url(data:font/woff2;base64,{base64.b64encode(p.read_bytes()).decode()}) format('woff2')}}")
+    return "".join(out)
+
+
+def _asset_b64(name: str, mime: str) -> str:
+    p = ASSETS / name
+    return f"data:{mime};base64," + base64.b64encode(p.read_bytes()).decode() if p.exists() else ""
 
 
 def _esc(s) -> str:
@@ -178,7 +214,7 @@ def _subject(r: dict, person: dict, img: Images, desk: bool, vw: int, vh: int, a
         rows.append(f'<div class="st2"><div class="im {"desk " if desk else ""}{img(s.get("shot"))}">{tap}</div>'
                     f'<div class="act">{s["i"] + 1}. {_esc(s["action"])}</div>'
                     + (f'<div class="th">{_esc(s["thought"])}</div>' if s.get("thought") else "") + dead + err + "</div>")
-    quote = f'<p class="quote">“{_esc(r["quote"])}”</p>' if r.get("quote") else ""
+    quote = f'<p class="quote">{_esc(r["quote"])}</p>' if r.get("quote") else ""
     return (f'<div class="subj"><div class="hd">{avatar(person, av)}<div><div class="nm">{_esc(person.get("first") or person["name"])}</div>'
             f'{cond(person)}</div>{stamp(r["status"])}</div>{quote}<div class="sum">{_esc(r.get("summary", ""))}</div>'
             f'<div class="film">{film}</div>'
@@ -238,16 +274,16 @@ def _findings(res: dict) -> str:
     if not res["findings"]:
         return '<p class="note">No barriers found for these people on this task.</p>'
     out = []
-    for f in res["findings"]:
+    for n, f in enumerate(res["findings"], 1):
         sev = f.get("severity") if f.get("severity") in SEV else "major"
         who = ", ".join(_esc(w) for w in f.get("who", []))
         ev = "".join(f"<li>{_esc(e)}</li>" for e in _as_list(f.get("evidence")))
         fixes = "".join(f"<li>{_esc(x)}</li>" for x in _as_list(f.get("fix")))
-        out.append(f'<article class="find {sev}"><div class="fmeta"><span class="dot"></span><span class="sevw">{SEV[sev]}</span>'
-                   + (f'<span>·</span><span>{who}</span>' if who else "") + f'</div><h3>{_esc(f["title"])}</h3>'
+        out.append(f'<article class="find {sev}"><div class="fnum">{n:02d}</div><div><div class="fmeta"><span class="mark">{SEV[sev]}</span>'
+                   + (f'<span>{who}</span>' if who else "") + f'</div><h3>{_esc(f["title"])}</h3>'
                    + (f'<p class="what">{_esc(f["what"])}</p>' if f.get("what") else "")
                    + (f'<ul class="ev">{ev}</ul>' if ev else "")
-                   + (f'<div class="fix"><div class="label">Fix</div><ol>{fixes}</ol></div>' if fixes else "") + "</article>")
+                   + (f'<div class="fix"><div class="label">The fix</div><ol>{fixes}</ol></div>' if fixes else "") + "</div></article>")
     return "".join(out)
 
 
@@ -281,8 +317,11 @@ def build_html(res: dict, personas: dict, shots: Path, viewport=(420, 860)) -> s
                 f'<div class="heat"><div class="im {"desk " if desk else ""}{first}"></div>{dots}</div>'
                 f'<p class="note">Each mark is one tap, labelled with the person’s initial.</p></details>')
     when = time.strftime("%d %b %Y, %H:%M", time.localtime(res.get("finished", time.time())))
-    body = f"""<div class="wrap"><div class="top"><span class="brand">HALLWAY<b>/</b>TEST</span><span>{_esc(host)}</span>
-<span class="when">{when}</span></div>
+    group = _asset_b64("group.jpg", "image/jpeg")
+    mast = (f'<header class="mast"><div class="bar"><span>Hallway / Test</span><span>{_esc(host)}</span>'
+            f'<span class="when">{when}</span></div>' + (f'<div class="pic"><img src="{group}" alt=""></div>' if group else "")
+            + "</header>")
+    body = f"""{mast}<div class="wrap"><span class="kick">Usability session report</span>
 <h1>{_esc(res.get('title') or host)}</h1>
 <p class="task">{_esc(res['task'])}</p>
 <div class="meta">{len(res['personas_order'])} people · real browsers · limits enforced in code</div>
@@ -295,26 +334,29 @@ def build_html(res: dict, personas: dict, shots: Path, viewport=(420, 860)) -> s
 access) and abilities (mouse, keyboard, tremor) are enforced by code; the model only decides what each person does next.
 Simulated people are not a substitute for testing with real users.</p></div>"""
     return (f'<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width">'
-            f'<title>Hallway Test · {_esc(host)}</title><style>{CSS}</style><style id="ht-img">{img.css()}</style></head>'
+            f'<title>Hallway Test · {_esc(host)}</title><style>{fonts_css()}{CSS}</style><style id="ht-img">{img.css()}</style></head>'
             f'<body>{body}</body></html>')
 
 
 CARD_CSS = BASE_CSS + """
-body{margin:0;width:1200px;height:675px;overflow:hidden;background:var(--paper);color:var(--ink);font:15px/1.4 var(--sans)}
-.c{display:grid;grid-template-columns:560px 1fr;height:675px}
-.l{padding:52px 48px 46px 60px;display:flex;flex-direction:column}
-.brand{font:700 13px var(--mono);letter-spacing:.14em} .brand b{color:var(--blue)}
-h1{font:800 42px/1.05 var(--sans);letter-spacing:-.035em;margin:26px 0 12px}
-.task{font-size:17px;line-height:1.45;color:var(--ink2)}
+body{margin:0;width:1200px;height:675px;overflow:hidden;background:var(--paper) """ + GRAIN + """;color:var(--navy);font:15px/1.4 var(--sans)}
+.c{position:relative;display:grid;grid-template-columns:560px 1fr;height:675px}
+.c:before{content:"";position:absolute;right:-40px;top:-40px;width:420px;height:300px;background-image:radial-gradient(var(--blue) 28%,transparent 31%);
+  background-size:8px 8px;opacity:.22;-webkit-mask-image:radial-gradient(closest-side,#000,transparent);mask-image:radial-gradient(closest-side,#000,transparent)}
+.l{position:relative;padding:48px 44px 44px 56px;display:flex;flex-direction:column;border-right:2px dashed var(--rule)}
+.brand{display:inline-block;align-self:flex-start;font:700 13px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:#fff;background:var(--blue);padding:6px 10px 5px}
+h1{font:800 60px/.92 var(--head);text-transform:uppercase;color:var(--blue);margin:22px 0 14px}
+.task{font-size:17px;line-height:1.45;color:var(--navy)}
 .sb{margin-top:auto} .nums{display:flex;align-items:flex-end;gap:16px}
-.num .n{font:800 112px/.88 var(--sans);letter-spacing:-.055em} .num .n small{font-size:44px;color:var(--ink3)}
-.num .label{margin-top:12px} .arrow{font:300 54px/1 var(--sans);color:var(--ink3);padding-bottom:26px}
-.fr{margin-top:14px;font:13px var(--mono);color:var(--ink3)} .fr b{color:var(--ink);font-weight:600}
-.r{padding:52px 60px 46px 20px;display:flex;flex-direction:column;justify-content:center}
-.p{display:grid;grid-template-columns:52px 1fr auto;gap:16px;align-items:center;padding:13px 0;border-top:1px solid var(--rule)}
-.p:first-child{border-top:0} .p .av{width:52px;height:52px}
-.p .nm{font:700 18px/1.1 var(--sans);margin-bottom:5px}
-.res2{display:flex;align-items:center;gap:8px} .res2 .to{color:var(--ink3)} .res2 .st{font-size:14px}
+.num .n{font:800 150px/.8 var(--head);color:var(--blue);text-shadow:5px 4px 0 rgba(255,79,154,.85)}
+.num .n small{font-size:62px;color:var(--ink3);text-shadow:none}
+.num .label{margin-top:14px} .arrow{font:700 64px/1 var(--head);color:var(--pink);padding-bottom:36px}
+.fr{margin-top:14px;font:13px var(--mono);color:var(--ink2)} .fr b{color:var(--blue)}
+.r{position:relative;padding:44px 52px 40px 32px;display:flex;flex-direction:column;justify-content:center;gap:16px}
+.p{display:grid;grid-template-columns:72px 1fr auto;gap:18px;align-items:center}
+.p .av{width:72px;height:72px;box-shadow:4px 4px 0 var(--pink)}
+.p .nm{font:800 30px/1 var(--head);text-transform:uppercase;margin-bottom:6px}
+.res2{display:flex;align-items:center;gap:8px} .res2 .to{font:700 20px var(--head);color:var(--pink)}
 """
 
 
@@ -329,8 +371,8 @@ def build_card(res: dict, personas: dict) -> str:
         res_html = stamp(r["status"]) + (f'<span class="to">→</span>{stamp(after["status"])}' if after else "")
         rows.append(f'<div class="p">{avatar(person, av)}<div><div class="nm">{_esc(person.get("first") or person["name"])}</div>'
                     f'{cond(person)}</div><div class="res2">{res_html}</div></div>')
-    return (f'<!doctype html><html><head><meta charset="utf-8"><style>{CARD_CSS}</style></head><body><div class="c"><div class="l">'
-            f'<div class="brand">HALLWAY<b>/</b>TEST</div><h1>{_esc(res.get("title") or host)}</h1>'
+    return (f'<!doctype html><html><head><meta charset="utf-8"><style>{fonts_css()}{CARD_CSS}</style></head><body><div class="c"><div class="l">'
+            f'<div class="brand">Hallway / Test</div><h1>{_esc(res.get("title") or host)}</h1>'
             f'<div class="task">{_esc(res["task"])}</div>{_nums(res)}</div>'
             f'<div class="r">{"".join(rows)}</div></div></body></html>')
 

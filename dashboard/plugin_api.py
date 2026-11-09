@@ -48,6 +48,22 @@ async def avatars():
     return {p.stem: _b64(p, "image/jpeg") for p in sorted(_AVATARS.glob("*.jpg"))}
 
 
+_FONTS = Path(__file__).resolve().parent.parent / "assets" / "fonts"
+
+
+@router.get("/fonts")
+async def fonts():
+    """@font-face rules for the report's print typefaces (SIL OFL), so the Desktop page matches."""
+    css = []
+    for fam, file, weight in (("Barlow Condensed", "barlow-condensed-latin-800-normal", 800),
+                              ("Space Mono", "space-mono-latin-700-normal", 700)):
+        p = _FONTS / f"{file}.woff2"
+        if p.exists():
+            css.append(f"@font-face{{font-family:'{fam}';font-weight:{weight};font-style:normal;font-display:swap;"
+                       f"src:url({_b64(p, 'font/woff2')}) format('woff2')}}")
+    return {"css": "".join(css)}
+
+
 @router.get("/runs")
 async def runs():
     d = _runs_dir()

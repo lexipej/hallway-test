@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from 'react'
 import { jsx, jsxs } from 'react/jsx-runtime'
 
 const ID = 'hallway-test'
+const PINK = '#ff4f9a' // the report's second print ink
 const $selected = atom(null)
 let rest = null
 let os = null
@@ -28,9 +29,10 @@ const STATUS = {
   starting: 'Opening', thinking: 'Looking', acting: 'Acting',
   success: 'Finished', gave_up: 'Gave up', false_done: 'False finish', out_of_steps: 'Stuck', error: 'Run error'
 }
-const STAMP = { success: ['check', 'var(--ui-green)'], gave_up: ['cross', 'var(--ui-red)'], out_of_steps: ['cross', 'var(--ui-red)'],
+const STAMP = { success: ['check', 'var(--ui-accent)'], gave_up: ['cross', PINK], out_of_steps: ['cross', PINK],
   false_done: ['alert', 'var(--ui-yellow)'], error: ['alert', 'var(--ui-text-tertiary)'] }
-const mono = { fontFamily: 'ui-monospace, "Cascadia Mono", "JetBrains Mono", Consolas, monospace' }
+const mono = { fontFamily: '"Space Mono", ui-monospace, "Cascadia Mono", Consolas, monospace' }
+const head = { fontFamily: '"Barlow Condensed", "Bahnschrift", "Arial Narrow", sans-serif', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.01em' }
 const caps = { ...mono, fontSize: 10.5, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase' }
 const DONE = new Set(['success', 'gave_up', 'false_done', 'out_of_steps', 'error'])
 
@@ -116,30 +118,39 @@ function useAvatars() {
   return q.data || {}
 }
 
+function PrintFonts() {
+  const q = useQuery({ queryKey: [ID, 'fonts'], queryFn: () => rest('/fonts'), staleTime: Infinity })
+  return q.data && q.data.css ? jsx('style', { children: q.data.css }) : null
+}
+
 function Avatar({ id, person, size = 40 }) {
   const avatars = useAvatars()
   const src = avatars[id]
   return jsx('div', {
-    style: { width: size, height: size, flex: 'none', overflow: 'hidden', borderRadius: '50%', background: 'var(--ui-accent)', color: 'var(--ui-base, #fff)',
-             display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: size * 0.38 },
+    style: { width: size, height: size, flex: 'none', overflow: 'hidden', background: 'var(--ui-accent)', color: '#fff',
+             boxShadow: `3px 3px 0 ${PINK}`, display: 'flex', alignItems: 'center', justifyContent: 'center', ...head, fontSize: size * 0.45 },
     children: src ? jsx('img', { src, alt: '', style: { width: '100%', height: '100%', objectFit: 'cover', display: 'block' } }) : person.initials
   })
 }
 
 function Chip({ person }) {
   return jsxs('span', {
-    style: { display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, color: 'var(--ui-text-tertiary)', whiteSpace: 'nowrap' },
+    style: { ...mono, display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase',
+             letterSpacing: '.03em', color: 'var(--ui-accent)', whiteSpace: 'nowrap' },
     children: [jsx(Icon, { name: person.icon, size: 12 }), person.condition]
   })
 }
 
 function Stamp({ status, step }) {
   const [ic, color] = STAMP[status] || ['tap', 'var(--ui-text-tertiary)']
-  const live = !DONE.has(status)
+  if (!DONE.has(status)) {
+    return jsxs('span', { style: { ...mono, display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11, color: 'var(--ui-text-tertiary)', whiteSpace: 'nowrap' },
+      children: [jsx('span', { style: { width: 6, height: 6, borderRadius: 6, background: PINK } }), step ? `Step ${step}` : (STATUS[status] || status)] })
+  }
   return jsxs('span', {
-    style: { display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 600, color: live ? 'var(--ui-text-tertiary)' : color, whiteSpace: 'nowrap' },
-    children: [live ? jsx('span', { style: { width: 6, height: 6, borderRadius: 6, background: 'var(--ui-accent)' } }) : jsx(Icon, { name: ic, size: 13 }),
-               live && step ? `Step ${step}` : (STATUS[status] || status)]
+    style: { ...mono, display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase', color,
+             border: `2px solid ${color}`, padding: '3px 6px 2px', transform: 'rotate(-1.5deg)', whiteSpace: 'nowrap' },
+    children: [jsx(Icon, { name: ic, size: 12 }), STATUS[status] || status]
   })
 }
 
@@ -151,34 +162,36 @@ function LiveView({ run }) {
   return jsxs('div', {
     style: { display: 'grid', gap: 28, maxWidth: 1200 },
     children: [
+      jsx(PrintFonts, {}),
       jsxs('div', { style: { display: 'grid', gap: 6 }, children: [
-        jsx('div', { style: { fontSize: 12, color: 'var(--ui-text-tertiary)' },
+        jsx('div', { style: { ...mono, fontSize: 11, textTransform: 'uppercase', letterSpacing: '.05em', color: PINK },
           children: run.status === 'writing report' ? 'Writing the report…' : `Live · ${finished} of ${people.length} done` }),
-        jsx('div', { style: { fontSize: 24, fontWeight: 750, letterSpacing: '-.02em', lineHeight: 1.15 }, children: run.title || run.url }),
+        jsx('div', { style: { ...head, fontSize: 38, lineHeight: .95, color: 'var(--ui-accent)' }, children: run.title || run.url }),
         jsx('div', { style: { fontSize: 14, color: 'var(--ui-text-secondary, var(--ui-text-tertiary))', maxWidth: 760 }, children: run.task })
       ] }),
       ...variants.map(v => jsxs('div', { style: { display: 'grid', gap: 10 }, children: [
-        variants.length > 1 && jsx('div', { style: { fontSize: 13, fontWeight: 600, color: 'var(--ui-text-tertiary)' }, children: v === 'before' ? 'Before' : 'After changes' }),
+        variants.length > 1 && jsx('div', { style: { ...head, fontSize: 20, color: 'var(--ui-accent)' }, children: v === 'before' ? 'Before' : 'After changes' }),
         jsx('div', {
           style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 14 },
           children: people.filter(p => p.variant === v).map(p => {
             const person = personOf(run, p.persona)
             return jsxs('div', {
-              style: { background: 'var(--ui-bg-elevated)', borderRadius: 10, padding: 12, display: 'grid', gap: 10, alignContent: 'start' },
+              style: { background: 'var(--ui-bg-elevated)', border: '1.5px solid var(--ui-stroke-secondary)', boxShadow: '4px 4px 0 var(--ui-accent)', padding: 12, display: 'grid', gap: 10, alignContent: 'start' },
               children: [
                 jsxs('div', { style: { display: 'flex', gap: 10, alignItems: 'center' }, children: [
                   jsx(Avatar, { id: p.persona, person, size: 34 }),
                   jsxs('div', { style: { display: 'grid', gap: 2, minWidth: 0, flex: 1 }, children: [
                     jsxs('div', { style: { display: 'flex', justifyContent: 'space-between', gap: 6, alignItems: 'baseline' }, children: [
-                      jsx('span', { style: { fontWeight: 650, fontSize: 14 }, children: person.first || person.name }),
+                      jsx('span', { style: { ...head, fontSize: 20, lineHeight: 1 }, children: person.first || person.name }),
                       jsx(Stamp, { status: p.status, step: p.step })
                     ] }),
                     jsx(Chip, { person })
                   ] })
                 ] }),
-                p.thumb ? jsx('img', { src: p.thumb, alt: `What ${person.first || 'this person'} sees`, style: { width: '100%', display: 'block', borderRadius: 6 } })
+                p.thumb ? jsx('img', { src: p.thumb, alt: `What ${person.first || 'this person'} sees`, style: { width: '100%', display: 'block', border: '1.5px solid var(--ui-stroke-secondary)' } })
                   : jsx('div', { style: { aspectRatio: '420 / 860', borderRadius: 6, background: 'var(--ui-bg-tertiary, transparent)' } }),
-                (p.quote || p.thought) && jsx('div', { style: { fontSize: 13, lineHeight: 1.4, color: 'var(--ui-text-secondary, inherit)' }, children: `“${p.quote || p.thought}”` })
+                (p.quote || p.thought) && jsxs('div', { style: { position: 'relative', paddingLeft: 18, fontSize: 13, lineHeight: 1.4, color: 'var(--ui-text-secondary, inherit)' }, children: [
+                  jsx('span', { style: { ...head, position: 'absolute', left: 0, top: -6, fontSize: 30, color: PINK }, children: '“' }), p.quote || p.thought] })
               ]
             }, p.key)
           })
