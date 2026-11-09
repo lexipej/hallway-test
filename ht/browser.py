@@ -46,7 +46,19 @@ PROBE_JS = r"""
     if (r.bottom < 0 || r.top > vh || r.right < 0 || r.left > vw) { if (r.top > vh) below++; continue; }
     el.setAttribute('data-ht', ++n);
     let text = clickable ? (el.innerText || el.value || '').trim().replace(/\s+/g, ' ') : own;
-    const aria = el.getAttribute('aria-label') || el.getAttribute('title') || '';
+    // Accessible name the way assistive tech builds it for icon controls: aria-label, aria-labelledby,
+    // title, then the alt / <title> of a picture inside the control.
+    const lb = el.getAttribute('aria-labelledby');
+    const lbText = lb ? lb.split(/\s+/).map(i => (document.getElementById(i) || {}).textContent || '').join(' ').trim() : '';
+    const inner = clickable ? el.querySelector('img[alt]:not([alt=""]), svg title, [aria-label]') : null;
+    const innerName = inner ? (inner.getAttribute('alt') || inner.getAttribute('aria-label') || inner.textContent || '') : '';
+    const aria = (el.getAttribute('aria-label') || lbText || el.getAttribute('title') || innerName || '').trim();
+    // A clickable wrapper around a real link or button is not itself a keyboard trap.
+    const wraps = clickable && !interactive.has(tag) &&
+      !!el.querySelector('a[href], button, input, select, textarea, [tabindex]:not([tabindex="-1"])');
+    // Links inside a sentence are exempt from target-size rules (WCAG 2.5.8).
+    const inSentence = tag === 'A' && cs.display === 'inline' && el.parentElement &&
+      (el.parentElement.innerText || '').trim().length > (el.innerText || '').trim().length + 15;
     let alt = isImg ? (el.getAttribute('alt') || '') : '';
     const graphic = el.querySelector && el.querySelector('svg,img');
     let fontEl = el;
@@ -71,7 +83,7 @@ PROBE_JS = r"""
     const sel = el.getAttribute('aria-pressed') === 'true' || el.getAttribute('aria-selected') === 'true' ||
                 el.getAttribute('aria-checked') === 'true' || el.checked === true ||
                 /(^|\s)(sel|selected|active|is-active|checked)(\s|$)/.test(el.className && el.className.baseVal === undefined ? el.className : '');
-    out.push({ ref: n, tag, role, text: text.slice(0, 90), aria, alt, clickable,
+    out.push({ ref: n, tag, role, text: text.slice(0, 90), aria, alt, clickable, wraps, inSentence,
       focusable: el.tabIndex >= 0 && !el.disabled, disabled: !!el.disabled || el.getAttribute('aria-disabled') === 'true',
       font: parseFloat(fcs.fontSize), contrast: Math.round(contrast*10)/10,
       border: hue(cs.borderColor), textHue: hue(fcs.color),
@@ -264,17 +276,19 @@ def audit(raw: dict) -> list[dict]:
             found.append({"kind": "small_text", "text": it["text"], "detail": f"{it['font']:.0f}px"})
         if it["text"] and it["contrast"] < 4.5 and not it["disabled"]:
             found.append({"kind": "low_contrast", "text": it["text"], "detail": f"contrast {it['contrast']}:1"})
-        if it["clickable"] and not it["focusable"] and it["tag"] not in ("INPUT", "SELECT", "TEXTAREA"):
+        if (it["clickable"] and not it["focusable"] and not it.get("wraps")
+                and it["tag"] not in ("INPUT", "SELECT", "TEXTAREA")):
             found.append({"kind": "not_keyboard", "text": name or f"unlabelled {it['tag'].lower()}",
                           "detail": f"<{it['tag'].lower()}> with a click handler but no keyboard focus"})
-        if it["clickable"] and not name:
+        if it["clickable"] and not name and not it.get("wraps"):
             found.append({"kind": "no_name", "text": f"icon control at {it['x']},{it['y']}",
                           "detail": "no text or aria-label"})
         if it["isImg"] and not it["alt"]:
             found.append({"kind": "no_alt", "text": f"image at {it['x']},{it['y']}", "detail": "missing alt text"})
         if it["tag"] in ("INPUT", "SELECT", "TEXTAREA") and not it["label"]:
             found.append({"kind": "no_label", "text": f"{it['tag'].lower()} field", "detail": "no label"})
-        if it["clickable"] and (it["w"] < 24 or it["h"] < 24) and it["tag"] != "INPUT":
+        if (it["clickable"] and (it["w"] < 24 or it["h"] < 24) and it["tag"] != "INPUT"
+                and not it.get("inSentence") and not it.get("wraps")):
             found.append({"kind": "small_target", "text": name or "control", "detail": f"{it['w']}x{it['h']}px"})
         if it["border"] == "red" and it["tag"] in ("INPUT", "TEXTAREA"):
             found.append({"kind": "colour_only", "text": it["label"] or "field",

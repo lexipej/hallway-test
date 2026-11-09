@@ -97,6 +97,9 @@ AUTOMATED CHECKS FOUND ON SCREENS THEY SAW:
 
 Write the 3 to 5 most important findings, most severe first. Each finding must name who it blocked or slowed,
 point to concrete evidence above, and give one specific fix a developer can apply.
+Severity must match what happened in THIS run: "blocker" only if it actually stopped someone from finishing;
+"major" if it clearly slowed or confused someone; an automated check that no one ran into is at most "minor".
+Never call something a blocker for a person who finished. Prefer fewer, well-evidenced findings over a long list.
 Reply with ONLY JSON: {{"findings": [{{"title": "...", "severity": "blocker|major|minor", "who": ["persona name", ...],
 "evidence": "...", "fix": "..."}}]}}"""
 

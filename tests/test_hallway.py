@@ -301,3 +301,26 @@ def test_fixed_demo_keeps_keyboard_focus(pw):
     pg.keyboard.press("Tab"); pg.keyboard.press("Enter")   # broken: focus drops after re-render
     assert pg.evaluate("document.activeElement === document.body")
     pg.close()
+
+
+def test_audit_avoids_common_false_positives(pw, tmp_path):
+    page = tmp_path / "p.html"
+    page.write_text("""<!doctype html><html><body style="font:16px sans-serif">
+      <ul><li style="cursor:pointer" onclick="1"><a href="#r1">University result one</a></li></ul>
+      <a href="/" id="logo"><img src="data:image/gif;base64,R0lGODlhAQABAAAAACw=" alt="Wikipedia" width="40" height="40"></a>
+      <p>Wikipedia is the <a href="#f">free</a> encyclopedia that anyone can edit, written collaboratively.</p>
+      <div style="cursor:pointer;width:40px;height:40px" onclick="1"><svg width="20" height="20"></svg></div>
+      </body></html>""", encoding="utf-8")
+    pg = _page(pw, page.as_uri())
+    found = B.audit(B.probe(pg))
+    kinds = [(i["kind"], i["text"]) for i in found]
+    assert not any(k == "not_keyboard" and "University" in t for k, t in kinds)      # wrapper around a real link
+    assert not any(k == "small_target" and t == "free" for k, t in kinds)            # link inside a sentence
+    assert sum(k == "no_name" for k, _ in kinds) == 1                                # only the bare icon div
+    assert any(k == "not_keyboard" for k, _ in kinds)                                # ...which is also a real trap
+    pg.close()
+
+
+def test_findings_prompt_ties_severity_to_outcomes():
+    from ht.brain import FINDINGS_PROMPT
+    assert "Never call something a blocker for a person who finished" in FINDINGS_PROMPT
