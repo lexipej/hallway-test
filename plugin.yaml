@@ -19,8 +19,6 @@ provides_hooks: []
 python_dependencies:
   - "playwright>=1.50,<2"
 config_schema:
-  model: {type: str, default: "", description: "Optional model for persona steps (needs plugins.entries.hallway-test.llm.allow_model_override). Empty = your active model."}
-  provider: {type: str, default: "", description: "Optional provider for persona steps (needs allow_provider_override). Empty = your active provider."}
   max_steps: {type: int, default: 16, description: "Most actions per person per run (keyboard-only people get 1.8x)."}
   parallel: {type: int, default: 10, description: "How many people browse at the same time."}
   time_budget_seconds: {type: int, default: 330, description: "Stop everyone after this long so the tool call finishes inside Hermes's tool timeout."}

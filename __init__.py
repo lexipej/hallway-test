@@ -58,14 +58,11 @@ def _data_dir() -> Path:
 
 
 def _make_complete(ctx, max_tokens: int):
-    model = (ctx.get_config("model", "") or "").strip() or None
-    provider = (ctx.get_config("provider", "") or "").strip() or None
-
     def complete(messages: list[dict]) -> str:
         last = None
         for _ in range(2):  # one retry for a transient provider error
             try:
-                res = ctx.llm.complete(messages, provider=provider, model=model, temperature=0.4,
+                res = ctx.llm.complete(messages, temperature=0.4,
                                        max_tokens=max_tokens, timeout=90, purpose="hallway-test persona step")
                 return res.text
             except Exception as exc:  # noqa: BLE001 - surfaced after the retry

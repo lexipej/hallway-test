@@ -193,7 +193,18 @@ class FakeCtx:
         self.commands[name] = handler
 
     def get_config(self, key, default=None):
+        if key in {"model", "provider"}:
+            raise ValueError("Expected a plugin-relative config key")
         return default
+
+
+def test_completion_uses_hermes_active_model():
+    mod = _load_plugin()
+    ctx = FakeCtx(lambda _: '{"action":"done"}')
+    complete = mod._make_complete(ctx, 220)
+    assert complete([{"role": "user", "content": "finish"}]) == '{"action":"done"}'
+    assert len(ctx.calls) == 1
+    assert "model" not in ctx.calls[0] and "provider" not in ctx.calls[0]
 
 
 def test_register_and_tool_round_trip(tmp_path, monkeypatch):
