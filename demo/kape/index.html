@@ -44,7 +44,7 @@ const sizes = [["Small", 0, 18], ["Medium", 20, 24], ["Large", 35, 30]];
 const st = { drink: null, size: null, step: 1 };
 const cup = h => `<svg width="${h}" height="${h + 6}" viewBox="0 0 24 30" fill="none" stroke="#6b3e26" stroke-width="2" aria-hidden="true"><path d="M5 6h14l-1.5 20a2 2 0 0 1-2 2h-7a2 2 0 0 1-2-2L5 6z"/></svg>`;
 function price() { const d = drinks.find(x => x[0] === st.drink); const s = sizes.find(x => x[0] === st.size); return (d ? d[1] : 0) + (s ? s[1] : 0); }
-function render() {
+function render(focusSel) {
   const app = document.getElementById('app');
   if (st.step === 1) {
     app.innerHTML = `
@@ -58,11 +58,11 @@ function render() {
       <div class="card"><div class="total"><span>Total</span><b>₱${price()}</b></div>
         ${FIXED ? `<button class="place" id="next">Continue to pickup details</button>` : `<div class="place" id="next">Continue</div>`}
         <div class="err" id="e1"></div></div>`;
-    app.querySelectorAll('[data-d]').forEach(b => b.onclick = () => { st.drink = b.dataset.d; render(); });
-    app.querySelectorAll('[data-s]').forEach(b => b.onclick = () => { st.size = b.dataset.s; render(); });
+    app.querySelectorAll('[data-d]').forEach(b => b.onclick = () => { st.drink = b.dataset.d; render(`[data-d="${b.dataset.d}"]`); });
+    app.querySelectorAll('[data-s]').forEach(b => b.onclick = () => { st.size = b.dataset.s; render(`[data-s="${b.dataset.s}"]`); });
     document.getElementById('next').onclick = () => {
       if (!st.drink || !st.size) { if (FIXED) document.getElementById('e1').textContent = 'Pick a drink and a size first.'; return; }
-      st.step = 2; render();
+      st.step = 2; render('#nm');
     };
   } else if (st.step === 2) {
     app.innerHTML = `
@@ -72,9 +72,11 @@ function render() {
         <label for="ph">Mobile number</label><input id="ph" inputmode="tel" ${FIXED ? 'aria-describedby="phe"' : ''}>
         ${FIXED ? '<div class="err" id="phe" role="alert"></div>' : ''}
         ${FIXED ? `<button class="place" id="go">Place order · ₱${price()}</button>` : `<div class="place" id="go">Place order</div>`}</div>`;
+    const valid = v => /^09\d{9}$/.test(v.replace(/\s/g, ''));
+    if (FIXED) document.getElementById('ph').oninput = e => { if (valid(e.target.value)) { e.target.classList.remove('bad'); document.getElementById('phe').textContent = ''; } };
     document.getElementById('go').onclick = () => {
       const ph = document.getElementById('ph'), nm = document.getElementById('nm');
-      const ok = /^09\d{9}$/.test(ph.value.replace(/\s/g, ''));
+      const ok = valid(ph.value);
       ph.classList.toggle('bad', !ok);
       if (FIXED) document.getElementById('phe').textContent = ok ? '' : 'Enter an 11-digit mobile number starting with 09, e.g. 0917 123 4567.';
       if (!ok || !nm.value.trim()) return;
@@ -84,6 +86,8 @@ function render() {
     app.innerHTML = `<div class="card done"><h2>Order placed</h2><p>${st.size} ${st.drink} for ${document.title && ''}pickup. We'll call your name.</p></div>`;
     document.title = 'Kapé — order placed';
   }
+  // The fixed version keeps keyboard focus where it was; the broken one drops it to the top after every tap.
+  if (FIXED && focusSel) { const el = document.querySelector(focusSel); if (el) el.focus(); }
 }
 render();
 </script>

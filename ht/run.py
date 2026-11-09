@@ -21,6 +21,10 @@ Complete = Callable[[list[dict]], str]
 HESITANT = re.compile(r"\b(guess|not sure|unsure|confus|can't|cannot|where|hmm|why|nothing happen|no idea|stuck|"
                       r"doesn't say|don't know|hope)\b", re.I)
 
+WHO = {"not_keyboard": ["keyboard"], "no_name": ["keyboard", "first_timer"], "no_label": ["keyboard"],
+       "no_alt": ["keyboard"], "small_text": ["low_vision"], "low_contrast": ["low_vision"],
+       "small_target": ["shaky"], "colour_only": ["colourblind"]}
+
 FIX_HINTS = {
     "not_keyboard": ("Controls that only work with a mouse", "blocker",
                      "Use a real <button> (or add tabindex=0, role=button and Enter/Space handlers)."),
@@ -238,7 +242,9 @@ def findings(task: str, results: list[dict], personas: dict, complete: Optional[
     for (k, t), it in issues.items():
         by_kind.setdefault(k, []).append(t)
     order = sorted(by_kind, key=lambda k: ["blocker", "major", "minor"].index(FIX_HINTS[k][1]))
-    return [{"title": FIX_HINTS[k][0], "severity": FIX_HINTS[k][1], "who": [],
+    ran = {r["persona"] for r in results}
+    return [{"title": FIX_HINTS[k][0], "severity": FIX_HINTS[k][1],
+             "who": [personas[p].name.split(",")[0] for p in WHO.get(k, []) if p in ran],
              "evidence": ", ".join(f"'{t}'" for t in by_kind[k][:4]), "fix": FIX_HINTS[k][2]} for k in order[:5]], "checks"
 
 
@@ -270,6 +276,8 @@ def run_test(url: str, task: str, complete: Complete, personas: list[Persona], d
                     results.append({"persona": p.id, "variant": v, "status": "error", "reason": err, "steps": [],
                                     "n_steps": 0, "dead_clicks": 0, "quote": "", "first_screen_clicks": [],
                                     "first_shot": "", "final_shot": "", "seconds": 0, "audit": {}})
+        if results and all(r["status"] == "error" for r in results):
+            raise RuntimeError(f"No one could start: {results[0]['reason'][:300]}")
         state.set(status="writing report")
         pmap = {p.id: p for p in personas}
         found, source = findings(task, [r for r in results if r["status"] != "error"], pmap,

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import logging
+import threading
 from pathlib import Path
 
 from .ht import demo
@@ -85,10 +86,20 @@ def run_tool(ctx, args: dict) -> dict:
     viewport = (1280, 800) if args.get("device") == "desktop" else (420, 860)
     max_steps = int(args.get("max_steps") or ctx.get_config("max_steps", 16))
     title = args.get("title") or ("Kapé coffee app (demo)" if is_demo else "")
-    return run_test(url, task, _make_complete(ctx, 220), pick(args.get("personas")), _data_dir(),
+    try:
+        return _run(ctx, args, url, is_demo, compare, task, success, viewport, max_steps, title)
+    except RuntimeError as exc:
+        if str(exc).startswith("No one could start"):
+            raise RuntimeError(f"{exc} {MODEL_HINT}") from None
+        raise
+
+
+def _run(ctx, args, url, is_demo, compare, task, success, viewport, max_steps, title) -> dict:
+    from .ht.run import run_test
+    return run_test(url, task, _make_complete(ctx, 700), pick(args.get("personas")), _data_dir(),
                     success_text=success, compare_url=compare, facts=args.get("facts", ""), max_steps=max_steps,
                     parallel=int(ctx.get_config("parallel", 10)), viewport=viewport, title=title,
-                    findings_complete=_make_complete(ctx, 1400),
+                    findings_complete=_make_complete(ctx, 3000),
                     time_budget=float(ctx.get_config("time_budget_seconds", 330)))
 
 
@@ -147,11 +158,16 @@ def register(ctx) -> None:
                 out.append(f"{r['id']}  {sc}  {r.get('title') or r['url']}  ({p.parent / 'report.html'})")
             return "\n".join(out)
         if arg == "demo":
-            try:
-                s = tool_summary(run_tool(ctx, {"url": "demo", "compare_url": "demo:fixed"}))
-            except Exception as exc:  # noqa: BLE001 - shown to the user as the command's reply
-                return f"Hallway Test could not run: {exc}"
-            return f"{s['score']}\nReport: {s['report_html']}\nCard: {s['summary_card']}"
+            # Desktop gives a command ~30 s to answer; a run takes minutes, so it runs in the background.
+            def work():
+                try:
+                    check_model_errors(run_tool(ctx, {"url": "demo", "compare_url": "demo:fixed"}))
+                except Exception:  # noqa: BLE001 - the run's state.json records the failure
+                    log.exception("hallway demo failed")
+            threading.Thread(target=work, name="hallway-demo-run", daemon=True).start()
+            return ("Hallway Test started: five people are trying the demo coffee app, before and after fixes. "
+                    "Watch it live on the Hallway Test page in the sidebar (about 1-3 minutes), or type "
+                    "/hallway runs to see results here.")
         return "Unknown option. Use /hallway, /hallway demo or /hallway runs."
 
     ctx.register_command("hallway", command, description="Hallway Test: run the demo or list recent runs",

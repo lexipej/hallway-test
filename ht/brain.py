@@ -25,8 +25,8 @@ RULES
 
 ACTIONS YOU CAN TAKE: {actions}
 {ref_hint}
-Reply with ONLY a JSON object on one line:
-{{"thought": "<one short sentence in first person, in character, what you notice or feel>", "action": "<one action>"}}"""
+Reply with ONLY a JSON object on one line, action first:
+{{"action": "<one action>", "thought": "<one short first-person sentence, at most 20 words, in character>"}}"""
 
 REF_HINT_MOUSE = "Refer to things on screen by their [number], e.g. click 4 or type 7 Maria."
 REF_HINT_KEYS = ("You cannot click. Tab moves focus forward through things the screen reader lets you reach; "
@@ -73,6 +73,11 @@ def parse_reply(raw: str) -> dict:
             continue
         if isinstance(obj, dict) and obj.get("action"):
             return {"thought": str(obj.get("thought", "")).strip()[:240], "action": str(obj["action"]).strip()}
+    # A reply cut off mid-thought still names its action when the action comes first.
+    m = re.search(r'"action"\s*:\s*"((?:[^"\\]|\\.)+)"', text)
+    if m:
+        t = re.search(r'"thought"\s*:\s*"((?:[^"\\]|\\.)*)', text)
+        return {"thought": (t.group(1) if t else "").strip()[:240], "action": m.group(1).strip()}
     m = re.search(r"\b(click \d+|type \d+ .+|press \S+|type_focused .+|scroll (?:up|down)|done|give_up.*)", text)
     if m:
         return {"thought": "", "action": m.group(1).strip()}

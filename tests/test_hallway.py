@@ -159,10 +159,11 @@ def test_full_run_writes_state_report_and_card(tmp_path):
 def test_model_reply_without_action_stops_cleanly(tmp_path):
     pytest.importorskip("playwright.sync_api")
     from ht.run import run_test
-    res = run_test(demo.resolve("demo")[0], "x", lambda m: "I refuse to answer in JSON", pick(["first_timer"]),
-                   tmp_path, success_text="Order placed", max_steps=6)
-    r = res["results"][0]
-    assert r["status"] == "error" and r["n_steps"] == 3
+    with pytest.raises(RuntimeError, match="No one could start"):
+        run_test(demo.resolve("demo")[0], "x", lambda m: "I refuse to answer in JSON", pick(["first_timer"]),
+                 tmp_path, success_text="Order placed", max_steps=6)
+    state = json.loads(next((tmp_path / "runs").glob("*/state.json")).read_text(encoding="utf-8"))
+    assert state["status"] == "error" and state["personas"]["before:first_timer"]["status"] == "error"
 
 
 # ---------------------------------------------------------------- plugin wiring
@@ -261,4 +262,38 @@ def test_all_model_errors_are_reported_not_scored(tmp_path, monkeypatch):
     mod.register(ctx)
     out = json.loads(ctx.tools["hallway_test"][1]({"url": "demo", "personas": ["first_timer"], "max_steps": 4}))
     assert not out["ok"] and "429" in out["error"] and "hermes model" in out["error"]
-    assert "could not run" in ctx.commands["hallway"]("demo")
+    state = json.loads(next((tmp_path / "runs").glob("*/state.json")).read_text(encoding="utf-8"))
+    assert state["status"] == "error" and "429" in state["error"]
+
+
+def test_demo_command_returns_immediately(tmp_path, monkeypatch):
+    import time
+    mod = _load_plugin()
+    monkeypatch.setattr(mod, "_data_dir", lambda: tmp_path)
+    started = threading.Event()
+    monkeypatch.setattr(mod, "run_tool", lambda ctx, args: (started.set(), time.sleep(0.5))[0])
+    ctx = FakeCtx(lambda m: "")
+    mod.register(ctx)
+    t0 = time.time()
+    reply = ctx.commands["hallway"]("demo")
+    assert time.time() - t0 < 0.3 and "started" in reply and "Hallway Test page" in reply
+    assert started.wait(2)
+
+
+def test_truncated_reply_still_yields_action():
+    got = parse_reply('{"action": "click 9", "thought": "My number now looks right, so the red warning is proba')
+    assert got["action"] == "click 9" and got["thought"].startswith("My number")
+    assert parse_reply('{"action": "type 7 \\"0917\\"", "thought": "x"}')["action"]
+
+
+def test_fixed_demo_keeps_keyboard_focus(pw):
+    pg = _page(pw, demo.resolve("demo:fixed")[0])
+    for _ in range(5):
+        pg.keyboard.press("Tab")
+    pg.keyboard.press("Enter")                       # picks a size button
+    assert pg.evaluate("document.activeElement.dataset.s") == "Small"
+    pg.close()
+    pg = _page(pw, demo.resolve("demo")[0])
+    pg.keyboard.press("Tab"); pg.keyboard.press("Enter")   # broken: focus drops after re-render
+    assert pg.evaluate("document.activeElement === document.body")
+    pg.close()
