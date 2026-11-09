@@ -39,7 +39,8 @@ def make(name="Sam", phone="+63 917 123 4567"):
         latte = find(r"^Iced Latte")
         if latte and "highlighted" not in txt[latte]:
             return json.dumps({"thought": "Iced latte.", "action": f"click {latte}"})
-        med = find(r"^Medium") or find(r"unlabelled icon, 30px")
+        icons = [r for r, k, t in lines if k == "control" and "unlabelled icon" in t]
+        med = find(r"^Medium") or (icons[1] if len(icons) >= 3 else None)
         if med and "highlighted" not in txt[med]:
             guess = "icon" in txt[med]
             return json.dumps({"thought": "No labels on the cups, so I guess the middle one is medium." if guess else "",

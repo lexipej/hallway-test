@@ -40,7 +40,20 @@ SCHEMA = {
             "compare_url": {"type": "string", "description": "Optional second version (e.g. your fix on another port, "
                             "or 'demo:fixed') to run the same people on for a before/after comparison."},
             "personas": {"type": "array", "items": {"type": "string", "enum": list(PERSONAS)},
-                         "description": "Subset of people to run. Default: all five."},
+                         "description": "Subset of the built-in people: first_timer (Maya), low_vision (Walter), "
+                                        "keyboard (Jordan, screen reader), colourblind (Ryan), shaky (Nina, tremor). "
+                                        "Default: all five."},
+            "custom_personas": {
+                "type": "array", "maxItems": 3,
+                "description": "Extra people to add to the run (up to 8 people in total). Their limits are enforced "
+                               "by combining traits: low_vision, screen_reader, keyboard_only, colour_blind, tremor.",
+                "items": {"type": "object", "additionalProperties": False, "required": ["name"], "properties": {
+                    "name": {"type": "string", "description": "Name and a short tag, e.g. 'Priya, 80'."},
+                    "about": {"type": "string", "description": "Who they are and how they behave, one or two sentences."},
+                    "traits": {"type": "array", "items": {"type": "string", "enum": ["low_vision", "screen_reader",
+                               "keyboard_only", "colour_blind", "tremor"]}},
+                    "text_size_px": {"type": "number", "description": "Smallest text size they can read (default 13.5 with low_vision)."},
+                    "tremor_px": {"type": "integer", "description": "How far taps land off target (default 9 with tremor)."}}}},
             "facts": {"type": "string", "description": "Details the people know, such as test login credentials."},
             "device": {"type": "string", "enum": ["mobile", "desktop"], "description": "Viewport. Default mobile."},
             "max_steps": {"type": "integer", "minimum": 4, "maximum": 40,
@@ -96,7 +109,7 @@ def run_tool(ctx, args: dict) -> dict:
     success = (args.get("success_text") or "").strip() or (demo.DEMO_SUCCESS if is_demo else "")
     viewport = (1280, 800) if args.get("device") == "desktop" else (420, 860)
     max_steps = int(args.get("max_steps") or ctx.get_config("max_steps", 16))
-    title = args.get("title") or ("Kapé coffee app (demo)" if is_demo else "")
+    title = args.get("title") or (demo.DEMO_TITLE if is_demo else "")
     try:
         return _run(ctx, args, url, is_demo, compare, task, success, viewport, max_steps, title)
     except RuntimeError as exc:
@@ -107,7 +120,7 @@ def run_tool(ctx, args: dict) -> dict:
 
 def _run(ctx, args, url, is_demo, compare, task, success, viewport, max_steps, title) -> dict:
     from .ht.run import run_test
-    return run_test(url, task, _make_complete(ctx, 700), pick(args.get("personas")), _data_dir(),
+    return run_test(url, task, _make_complete(ctx, 700), pick(args.get("personas"), args.get("custom_personas")), _data_dir(),
                     success_text=success, compare_url=compare, facts=args.get("facts", ""), max_steps=max_steps,
                     parallel=max(1, min(int(ctx.get_config("parallel", 3)), 6)), viewport=viewport, title=title,
                     findings_complete=_make_complete(ctx, 8000, timeout=180),
@@ -132,7 +145,8 @@ def tool_summary(res: dict) -> dict:
     for v in res["variants"]:
         sc = res["score"][v]
         lines.append(f"{v}: {sc['passed']}/{sc['total']} finished")
-    people = [{"variant": r["variant"], "persona": PERSONAS[r["persona"]].name, "status": r["status"],
+    names = {p["id"]: p["name"] for p in res.get("people", [])}
+    people = [{"variant": r["variant"], "persona": names.get(r["persona"], r["persona"]), "status": r["status"],
                "summary": r.get("summary", ""), "in_their_words": r.get("quote", "")} for r in res["results"]]
     return {
         "ok": True, "run_id": res["id"], "score": "; ".join(lines), "people": people,
@@ -145,9 +159,7 @@ def tool_summary(res: dict) -> dict:
 def register(ctx) -> None:
     try:
         ctx.register_auxiliary_task(
-            AUX_TASK, display_name="Hallway Test people",
-            description="Model the five simulated people (and the findings writer) use. A run makes about "
-                        "40-150 short calls, so a fast, inexpensive model works well. Auto = your main model.")
+            AUX_TASK, display_name="Hallway Test", description="Simulated testers")
         _aux["registered"] = True
     except Exception:  # noqa: BLE001 - older Hermes: fall back to the main model
         _aux["registered"] = False

@@ -1,4 +1,4 @@
-"""Serve the bundled Kapé demo app on 127.0.0.1 so anyone can try Hallway Test with no setup."""
+"""Serve the bundled demo app on 127.0.0.1 so anyone can try Hallway Test with no setup."""
 from __future__ import annotations
 
 import functools
@@ -6,10 +6,11 @@ import threading
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-DEMO_DIR = Path(__file__).resolve().parent.parent / "demo" / "kape"
-DEMO_TASK = "Order a medium iced latte for pickup. Use your own name and the phone number +63 917 123 4567."
-DEMO_SUCCESS = "Order placed"
-_server = None
+DEMO_DIR = Path(__file__).resolve().parent.parent / "demo" / "pier9"
+DEMO_TITLE = "Pier 9 Live seat picker (demo)"
+DEMO_TASK = ("Buy two tickets for Friday's Moonlit Static show: two seats next to each other in row C.")
+DEMO_SUCCESS = "You're going"
+_servers: dict[str, ThreadingHTTPServer] = {}
 _lock = threading.Lock()
 
 
@@ -18,21 +19,26 @@ class _Quiet(SimpleHTTPRequestHandler):
         pass
 
 
-def demo_base() -> str:
-    global _server
+def serve_path(root: Path) -> str:
+    """Serve ``root`` on a random 127.0.0.1 port (once per folder) and return its base URL."""
+    key = str(Path(root).resolve())
     with _lock:
-        if _server is None:
-            handler = functools.partial(_Quiet, directory=str(DEMO_DIR))
-            _server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
-            threading.Thread(target=_server.serve_forever, name="hallway-demo", daemon=True).start()
-        return f"http://127.0.0.1:{_server.server_address[1]}/"
+        if key not in _servers:
+            server = ThreadingHTTPServer(("127.0.0.1", 0), functools.partial(_Quiet, directory=key))
+            threading.Thread(target=server.serve_forever, name="hallway-demo", daemon=True).start()
+            _servers[key] = server
+        return f"http://127.0.0.1:{_servers[key].server_address[1]}/"
+
+
+def demo_base() -> str:
+    return serve_path(DEMO_DIR)
 
 
 def resolve(url: str) -> tuple[str, bool]:
-    """'demo' -> the broken Kapé app, 'demo:fixed' -> the repaired one. Returns (url, is_demo)."""
-    u = (url or "").strip()
-    if u.lower() in ("demo", "demo:broken", "kape"):
+    """'demo' -> the broken seat picker, 'demo:fixed' -> the repaired one. Returns (url, is_demo)."""
+    u = (url or "").strip().lower()
+    if u in ("demo", "demo:broken"):
         return demo_base(), True
-    if u.lower() in ("demo:fixed", "kape:fixed"):
+    if u == "demo:fixed":
         return demo_base() + "?fixed=1", True
-    return u, False
+    return (url or "").strip(), False

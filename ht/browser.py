@@ -17,10 +17,13 @@ PROBE_JS = r"""
     if (a !== undefined && a < 0.1) return null;
     const f = v => { v/=255; return v<=0.03928? v/12.92 : Math.pow((v+0.055)/1.055,2.4); };
     return 0.2126*f(r)+0.7152*f(g)+0.0722*f(b); };
-  const bgOf = (el) => { for (let e = el; e; e = e.parentElement) {
-      const L = lum(getComputedStyle(e).backgroundColor); if (L !== null) return L; } return 1; };
+  // Background luminance behind an element; null when it sits on an image or gradient we can't measure.
+  const bgOf = (el) => { for (let e = el; e; e = e.parentElement) { const c = getComputedStyle(e);
+      if (c.backgroundImage && c.backgroundImage !== 'none') return null;
+      const L = lum(c.backgroundColor); if (L !== null) return L; } return 1; };
   const hue = (c) => { const m = parse(c); if (!m) return ''; const [r,g,b] = m;
-    if (r > 170 && g < 120 && b < 120) return 'red'; if (g > 140 && r < 130 && b < 150) return 'green'; return ''; };
+    if (r > 170 && g < 120 && b < 120) return 'red'; if (g > 140 && r < 130 && b < 150) return 'green';
+    if (b > 170 && r < 120 && g < 160) return 'blue'; return ''; };
   const vw = innerWidth, vh = innerHeight;
   const interactive = new Set(['BUTTON','A','INPUT','SELECT','TEXTAREA','SUMMARY']);
   const roles = new Set(['button','link','checkbox','radio','tab','menuitem','option','switch','combobox','textbox']);
@@ -75,7 +78,7 @@ PROBE_JS = r"""
     }
     const fcs = fontEl === el ? cs : getComputedStyle(fontEl);
     const L1 = lum(fcs.color) ?? 0, L2 = bgOf(fontEl);
-    const contrast = (Math.max(L1,L2)+0.05)/(Math.min(L1,L2)+0.05);
+    const contrast = L2 === null ? 21 : (Math.max(L1,L2)+0.05)/(Math.min(L1,L2)+0.05);  // unknown: don't guess
     let label = '';
     if (['INPUT','SELECT','TEXTAREA'].includes(tag)) {
       label = (el.id && document.querySelector(`label[for="${CSS.escape(el.id)}"]`)?.innerText) ||
@@ -87,7 +90,7 @@ PROBE_JS = r"""
     out.push({ ref: n, tag, role, text: text.slice(0, 90), aria, alt, clickable, wraps, inSentence,
       focusable: el.tabIndex >= 0 && !el.disabled, disabled: !!el.disabled || el.getAttribute('aria-disabled') === 'true',
       font: parseFloat(fcs.fontSize), contrast: Math.round(contrast*10)/10,
-      border: hue(cs.borderColor), textHue: hue(fcs.color),
+      border: hue(cs.borderColor), textHue: hue(fcs.color), fill: clickable ? hue(cs.backgroundColor) : '',
       graphic: !!graphic, graphicH: graphic ? Math.round(graphic.getBoundingClientRect().height) : Math.round(r.height),
       isImg, selected: !!sel, label: (label || '').trim().slice(0, 60), type: el.type || '',
       value: (el.value || '').slice(0, 60), options: tag === 'SELECT' ? [...el.options].map(o => o.text).slice(0, 12) : [],
@@ -118,6 +121,7 @@ MOUSE_ACTIONS = ("click <ref> | type <ref> <text> | select <ref> <option text> |
                  "scroll to top | scroll to bottom | "
                  "done | give_up <reason>")
 KEY_ACTIONS = ("press Tab | press Shift+Tab | press Enter | press Space | press ArrowDown | press ArrowUp | "
+               "press ArrowLeft | press ArrowRight | "
                "press Escape | press Control+A | type_focused <text> | done | give_up <reason>")
 ALLOWED_KEYS = {"Tab", "Shift+Tab", "Enter", "Space", "ArrowDown", "ArrowUp", "ArrowLeft", "ArrowRight",
                 "Escape", "Control+A", "Backspace", "Home", "End"}
@@ -153,7 +157,8 @@ def _describe_item(it: dict, p) -> str | None:
         t = f"picture: {it['alt']}" if it["alt"] else f"[unlabelled picture, {it['h']}px tall]"
     elif it["clickable"] and not it["text"]:
         name = it["aria"]
-        t = f"[{name}]" if name else f"[unlabelled icon, {it['graphicH']}px tall]"
+        shape = "icon" if it["graphic"] else "square" if abs(it["w"] - it["h"]) <= 3 else "shape"
+        t = f"[{name}]" if name else f"[unlabelled {shape}, {it['w']}x{it['h']}px]"
     if it["tag"] in ("INPUT", "TEXTAREA"):
         kind = "checkbox" if it["type"] in ("checkbox", "radio") else "text field"
         lab = it["label"] or "no label"
@@ -164,9 +169,10 @@ def _describe_item(it: dict, p) -> str | None:
     cues = []
     if it["selected"] and it["tag"] not in ("INPUT",):
         cues.append("highlighted")
-    for what, hue in (("border", it["border"]), ("text", it["textHue"])):
+    for what, hue in (("border", it["border"]), ("text", it["textHue"]), ("fill", it.get("fill", ""))):
         if hue:
-            cues.append(f"{'brownish' if p.colour_vision == 'deuteranopia' else hue} {what}")
+            seen = "brownish" if p.colour_vision == "deuteranopia" and hue in ("red", "green") else hue
+            cues.append(f"{seen} {what}" if what != "fill" else f"coloured {seen}")
     if it["disabled"] or (it["clickable"] and it["contrast"] < 2.2 and not unreadable and it["text"]):
         cues.append("looks greyed out / disabled")
     if not t:

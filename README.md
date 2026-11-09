@@ -60,7 +60,7 @@ Ask Hermes in plain words, or call the `hallway_test` tool:
 ## Requirements and settings
 
 - Hermes 0.23 or newer. No extra API keys: the people run on a model you already have in Hermes.
-- **Choosing the model.** Hallway Test registers its own model slot, **Hallway Test people**, under
+- **Choosing the model.** Hallway Test registers its own model slot, **Hallway Test** ("Simulated testers"), under
   Settings → Model → Auxiliary models (or `auxiliary.hallway_test` in `config.yaml`). Left on Auto it uses your main
   Hermes model. A run makes 40-150 short calls, so pointing it at a fast, inexpensive model (a "flash" or "mini"
   model) keeps runs quick and cheap while your chat stays on whatever model you like. The model picked inside a

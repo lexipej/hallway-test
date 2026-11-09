@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pier 9 Live · Moonlit Static</title>
+<style>
+  :root { --bg: #0c0b10; --panel: #16141d; --line: #2a2733; --text: #f3f1f7; --muted: #a29fb0; --amber: #ffb547; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  header { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; border-bottom: 1px solid var(--line); }
+  .brand { font-weight: 800; letter-spacing: .14em; font-size: 13px; }
+  .brand b { color: var(--amber); }
+  .cart { font-size: 13px; color: var(--muted); }
+  .event { padding: 18px; background: radial-gradient(120% 90% at 50% 0%, #3a2350 0%, transparent 70%); }
+  .event .when { font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--amber); font-weight: 700; }
+  .event h1 { margin: 6px 0 2px; font-size: 26px; line-height: 1.1; }
+  .event p { margin: 0; color: var(--muted); font-size: 14px; }
+  main { padding: 0 18px 18px; }
+  .stage { margin: 8px auto 14px; width: 78%; height: 26px; border-radius: 0 0 120px 120px; background: linear-gradient(#ffcf7a, #ff9d2e); color: #2a1600;
+           font-size: 11px; font-weight: 800; letter-spacing: .3em; display: flex; align-items: center; justify-content: center; }
+  .rows { display: grid; gap: 6px; justify-content: center; }
+  .row { display: flex; align-items: center; gap: 3px; }
+  .rowlabel { width: 16px; text-align: center; }
+  .hint { text-align: center; margin: 10px 0 0; }
+  .legend { display: flex; gap: 14px; justify-content: center; margin-top: 10px; }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .bar { margin-top: 16px; padding: 14px; border: 1px solid var(--line); background: var(--panel); border-radius: 12px; display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .bar .sum { font-size: 14px; }
+  .bar .sum small { display: block; color: var(--muted); }
+  .buy { background: var(--amber); color: #1d1200; border: 0; border-radius: 10px; padding: 12px 18px; font-weight: 800; font-size: 15px; cursor: pointer; }
+  .err { color: #ffb4a8; font-size: 14px; margin-top: 8px; min-height: 1px; }
+
+  /* Broken: tiny colour-only seats that are not controls, faint labels */
+  .seat { width: 14px; height: 14px; border-radius: 3px; cursor: pointer; }
+  .seat.free { background: #2fae5a; }
+  .seat.taken { background: #e0402f; }
+  .seat.mine { background: #4c7dff; }
+  .broken .rowlabel, .broken .legend, .broken .hint { font-size: 9px; color: #55525f; }
+  .broken .bar .sum small { font-size: 10px; color: #4a4754; }
+  .shake { animation: shake .25s; }
+  @keyframes shake { 25% { transform: translateX(-3px) } 75% { transform: translateX(3px) } }
+
+  /* Fixed: real buttons, 32px targets, text + symbols, readable labels */
+  .fixed .row { gap: 4px; }
+  .fixed .rowlabel { font-size: 14px; font-weight: 800; color: var(--text); width: 18px; }
+  .fixed .legend, .fixed .hint { font-size: 14px; color: var(--muted); }
+  button.s { width: 32px; height: 32px; border-radius: 7px; border: 2px solid #3fd07a; background: transparent; color: var(--text);
+             font: 700 15px system-ui, sans-serif; cursor: pointer; padding: 0; }
+  button.s[aria-disabled="true"] { border-color: #3a3744; background: #1c1a23; color: #6d6a78; cursor: not-allowed; }
+  button.s[aria-pressed="true"] { background: var(--amber); border-color: var(--amber); color: #1d1200; }
+  button.s:focus-visible, .buy:focus-visible { outline: 3px solid #fff; outline-offset: 2px; }
+  .fixed .brand, .fixed .cart, .fixed .event .when, .fixed .stage { font-size: 14px; }
+  .fixed .bar .sum small { font-size: 14px; }
+  .done { text-align: center; padding: 60px 24px; }
+  .done h1 { font-size: 34px; margin: 0 0 8px; }
+  .done .tix { display: inline-block; margin-top: 18px; padding: 14px 20px; border: 1px dashed var(--amber); border-radius: 12px; color: var(--amber); font-weight: 700; }
+</style>
+</head>
+<body>
+<header><div class="brand">PIER<b>9</b> LIVE</div><div class="cart" id="cart">Tickets</div></header>
+<div class="event">
+  <div class="when">Fri 14 Nov · Doors 7 PM</div>
+  <h1>Moonlit Static</h1>
+  <p>The Glass Hours tour · all seats €39</p>
+</div>
+<main id="app"></main>
+<script>
+const FIXED = new URLSearchParams(location.search).has('fixed');
+document.body.classList.add(FIXED ? 'fixed' : 'broken');
+const ROWS = 'ABCDEF'.split('');
+const FREE = { A: [3, 4, 7, 8], B: [1, 2, 9, 10], C: [4, 7, 8], D: [2, 3], E: [1, 2, 9, 10], F: [5, 6] };
+const mine = new Set();
+let focusId = 'A3';
+const id = (r, n) => r + n;
+const isFree = (r, n) => FREE[r].includes(n);
+const app = document.getElementById('app');
+
+function seat(r, n) {
+  const k = id(r, n), free = isFree(r, n), sel = mine.has(k);
+  if (!FIXED) return `<div class="seat ${sel ? 'mine' : free ? 'free' : 'taken'}" data-k="${k}"></div>`;
+  const label = `Row ${r}, seat ${n}, ${free ? (sel ? 'selected' : 'available') : 'taken'}`;
+  return `<button class="s" data-k="${k}" aria-label="${label}" aria-pressed="${sel}" ${free ? '' : 'aria-disabled="true"'}
+           tabindex="${k === focusId ? 0 : -1}">${free ? (sel ? '✓' : n) : '✕'}</button>`;
+}
+
+function render(keepFocus) {
+  const picked = [...mine].sort();
+  app.innerHTML = `
+    <div class="stage" aria-hidden="true">STAGE</div>
+    <div class="rows" ${FIXED ? 'role="group" aria-label="Seat map. Use arrow keys to move between seats, Enter to select."' : ''}>
+      ${ROWS.map(r => `<div class="row"><span class="rowlabel">${r}</span>${[1,2,3,4,5,6,7,8,9,10].map(n => seat(r, n)).join('')}<span class="rowlabel">${r}</span></div>`).join('')}
+    </div>
+    <p class="hint">${FIXED ? 'Pick seats next to each other. Use arrow keys to move between seats.' : 'Tap seats to select'}</p>
+    <div class="legend">${FIXED
+      ? '<span>▢ Available</span><span>✕ Taken</span><span>✓ Your seats</span>'
+      : '<span>■ Available</span><span>■ Taken</span><span>■ Selected</span>'}</div>
+    <div class="bar">
+      <div class="sum" ${FIXED ? 'aria-live="polite"' : ''}>${picked.length ? picked.join(', ') : 'No seats yet'}<small>${picked.length} × €39 = €${picked.length * 39}</small></div>
+      <button class="buy" id="buy">Buy tickets</button>
+    </div>
+    <div class="err" id="err" ${FIXED ? 'role="alert"' : ''}></div>`;
+  app.querySelectorAll('[data-k]').forEach(el => el.addEventListener('click', () => toggle(el.dataset.k, el)));
+  if (FIXED) {
+    app.querySelector('.rows').addEventListener('keydown', onKey);
+    if (keepFocus) { const f = app.querySelector(`[data-k="${focusId}"]`); if (f) f.focus(); }
+  }
+  document.getElementById('buy').onclick = buy;
+}
+
+function toggle(k, el) {
+  const r = k[0], n = +k.slice(1);
+  if (!isFree(r, n)) { if (!FIXED) { el.classList.remove('shake'); void el.offsetWidth; el.classList.add('shake'); } return; }
+  mine.has(k) ? mine.delete(k) : mine.add(k);
+  focusId = k;
+  render(FIXED);
+}
+
+function onKey(e) {
+  const r = ROWS.indexOf(focusId[0]), n = +focusId.slice(1);
+  const moves = { ArrowLeft: [0, -1], ArrowRight: [0, 1], ArrowUp: [-1, 0], ArrowDown: [1, 0] };
+  if (!moves[e.key]) return;
+  e.preventDefault();
+  const nr = Math.min(5, Math.max(0, r + moves[e.key][0])), nn = Math.min(10, Math.max(1, n + moves[e.key][1]));
+  focusId = id(ROWS[nr], nn);
+  render(true);
+}
+
+function buy() {
+  const picked = [...mine].sort((a, b) => +a.slice(1) - +b.slice(1));
+  const together = picked.length === 2 && picked[0][0] === picked[1][0] && Math.abs(+picked[0].slice(1) - +picked[1].slice(1)) === 1;
+  const err = document.getElementById('err');
+  if (!together) {
+    if (FIXED) err.textContent = picked.length === 2 ? 'Those two seats are not next to each other. Pick two seats side by side.' : 'Pick two seats next to each other first.';
+    else { const b = document.getElementById('buy'); b.classList.remove('shake'); void b.offsetWidth; b.classList.add('shake'); }
+    return;
+  }
+  document.title = "You're going! · Pier 9 Live";
+  app.innerHTML = `<div class="done"><h1>You're going!</h1><p>Moonlit Static · Fri 14 Nov · Pier 9 Live</p>
+    <div class="tix">Row ${picked[0][0]} · Seats ${picked.map(p => p.slice(1)).join(' & ')}</div></div>`;
+}
+render(false);
+</script>
+</body>
+</html>

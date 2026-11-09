@@ -21,6 +21,10 @@ from ht.run import launch  # noqa: E402
 
 import fake_brain  # noqa: E402
 
+KAPE = demo.serve_path(ROOT / "tests" / "fixtures" / "kape")   # the old coffee app: a fixture with known barriers
+KAPE_FIXED = KAPE + "?fixed=1"
+KAPE_TASK = "Order a medium iced latte for pickup. Use your own name and the phone number +63 917 123 4567."
+
 
 # ---------------------------------------------------------------- pure logic
 def test_parse_reply_variants():
@@ -71,7 +75,7 @@ def _page(br, url):
 
 
 def test_perception_is_enforced_per_persona(pw):
-    pg = _page(pw, demo.resolve("demo")[0])
+    pg = _page(pw, KAPE)
     first = B.observe(pg, PERSONAS["first_timer"])["text"]
     low = B.observe(pg, PERSONAS["low_vision"])["text"]
     sr = B.observe(pg, PERSONAS["keyboard"])["text"]
@@ -83,7 +87,7 @@ def test_perception_is_enforced_per_persona(pw):
 
 
 def test_fixed_demo_is_readable_and_reachable(pw):
-    pg = _page(pw, demo.resolve("demo:fixed")[0])
+    pg = _page(pw, KAPE_FIXED)
     low = B.observe(pg, PERSONAS["low_vision"])["text"]
     sr = B.observe(pg, PERSONAS["keyboard"])["text"]
     assert "Medium" in low and "faint" not in low
@@ -92,7 +96,7 @@ def test_fixed_demo_is_readable_and_reachable(pw):
 
 
 def test_colour_blind_sees_red_as_brownish(pw):
-    pg = _page(pw, demo.resolve("demo")[0])
+    pg = _page(pw, KAPE)
     pg.evaluate("() => document.querySelector('.drink').style.border = '2px solid rgb(224,65,58)'")
     assert "red border" in B.observe(pg, PERSONAS["first_timer"])["text"]
     assert "brownish border" in B.observe(pg, PERSONAS["colourblind"])["text"]
@@ -100,7 +104,7 @@ def test_colour_blind_sees_red_as_brownish(pw):
 
 
 def test_actions_are_limited_by_ability(pw):
-    pg = _page(pw, demo.resolve("demo")[0])
+    pg = _page(pw, KAPE)
     rng = random.Random(1)
     obs = B.observe(pg, PERSONAS["keyboard"])
     with pytest.raises(B.ActionError):
@@ -119,11 +123,11 @@ def test_actions_are_limited_by_ability(pw):
 
 
 def test_audit_flags_demo_barriers(pw):
-    pg = _page(pw, demo.resolve("demo")[0])
+    pg = _page(pw, KAPE)
     kinds = {i["kind"] for i in B.audit(B.probe(pg))}
     assert {"not_keyboard", "no_name", "small_text", "low_contrast"} <= kinds
     pg.close()
-    pg = _page(pw, demo.resolve("demo:fixed")[0])
+    pg = _page(pw, KAPE_FIXED)
     assert B.audit(B.probe(pg)) == []
     pg.close()
 
@@ -143,8 +147,8 @@ def _per_thread_brain():
 def test_full_run_writes_state_report_and_card(tmp_path):
     pytest.importorskip("playwright.sync_api")
     from ht.run import run_test
-    res = run_test(demo.resolve("demo")[0], demo.DEMO_TASK, _per_thread_brain(), pick(["first_timer", "colourblind"]),
-                   tmp_path, success_text="Order placed", compare_url=demo.resolve("demo:fixed")[0], max_steps=14)
+    res = run_test(KAPE, KAPE_TASK, _per_thread_brain(), pick(["first_timer", "colourblind"]),
+                   tmp_path, success_text="Order placed", compare_url=KAPE_FIXED, max_steps=14)
     by = {(r["variant"], r["persona"]): r for r in res["results"]}
     assert by[("before", "first_timer")]["status"] == "success"
     assert by[("before", "colourblind")]["status"] == "gave_up"      # the red border tells him nothing
@@ -162,7 +166,7 @@ def test_model_reply_without_action_stops_cleanly(tmp_path):
     pytest.importorskip("playwright.sync_api")
     from ht.run import run_test
     with pytest.raises(RuntimeError, match="No one could start"):
-        run_test(demo.resolve("demo")[0], "x", lambda m: "I refuse to answer in JSON", pick(["first_timer"]),
+        run_test(KAPE, "x", lambda m: "I refuse to answer in JSON", pick(["first_timer"]),
                  tmp_path, success_text="Order placed", max_steps=6)
     state = json.loads(next((tmp_path / "runs").glob("*/state.json")).read_text(encoding="utf-8"))
     assert state["status"] == "error" and state["personas"]["before:first_timer"]["status"] == "error"
@@ -219,11 +223,12 @@ def test_register_and_tool_round_trip(tmp_path, monkeypatch):
     assert set(ctx.tools) == {"hallway_test"} and "hallway" in ctx.commands
     schema, handler = ctx.tools["hallway_test"]
     assert schema["parameters"]["required"] == ["url"]
-    out = json.loads(handler({"url": "demo", "personas": ["first_timer"], "max_steps": 12}))
+    out = json.loads(handler({"url": KAPE, "task": KAPE_TASK, "success_text": "Order placed",
+                              "personas": ["first_timer"], "max_steps": 12}))
     assert out["ok"] and out["score"] == "before: 1/1 finished"
     assert "MEDIA:" in out["show_user"] and Path(out["summary_card"]).exists()
     assert all(c.get("model") is None and c.get("provider") is None for c in ctx.calls)   # user's own model
-    assert "Kapé" in ctx.commands["hallway"]("runs") or "demo" in ctx.commands["hallway"]("runs")
+    assert "1/1" in ctx.commands["hallway"]("runs")
     bad = json.loads(handler({"url": "https://example.com"}))
     assert not bad["ok"] and "task is required" in bad["error"]
 
@@ -293,13 +298,13 @@ def test_truncated_reply_still_yields_action():
 
 
 def test_fixed_demo_keeps_keyboard_focus(pw):
-    pg = _page(pw, demo.resolve("demo:fixed")[0])
+    pg = _page(pw, KAPE_FIXED)
     for _ in range(5):
         pg.keyboard.press("Tab")
     pg.keyboard.press("Enter")                       # picks a size button
     assert pg.evaluate("document.activeElement.dataset.s") == "Small"
     pg.close()
-    pg = _page(pw, demo.resolve("demo")[0])
+    pg = _page(pw, KAPE)
     pg.keyboard.press("Tab"); pg.keyboard.press("Enter")   # broken: focus drops after re-render
     assert pg.evaluate("document.activeElement === document.body")
     pg.close()
@@ -384,7 +389,7 @@ def test_fallback_findings_follow_the_run():
                dict(base, persona="shaky", status="gave_up", quote="I can't hit it", audit={})]
     got, src = findings("t", results, P, None)
     assert src == "checks"
-    assert got[0]["severity"] == "blocker" and "Aling Nena" in got[0]["title"]
+    assert got[0]["severity"] == "blocker" and "Nina" in got[0]["title"]
     mouse_only = next(f for f in got if f["title"].startswith("Controls"))
     assert mouse_only["severity"] != "blocker"           # Jo finished, so it can't be a blocker
 
@@ -420,5 +425,42 @@ def test_personas_use_the_plugins_own_auxiliary_task(tmp_path, monkeypatch):
     ctx = AuxCtx(_per_thread_brain())
     mod.register(ctx)
     assert "hallway_test" in ctx.aux and "Auxiliary" not in ctx.aux["hallway_test"]["display_name"]
-    out = json.loads(ctx.tools["hallway_test"][1]({"url": "demo", "personas": ["first_timer"], "max_steps": 12}))
+    out = json.loads(ctx.tools["hallway_test"][1]({"url": KAPE, "task": KAPE_TASK, "success_text": "Order placed",
+                                                    "personas": ["first_timer"], "max_steps": 12}))
     assert out["ok"] and ctx.calls and all(c.get("task") == "hallway_test" for c in ctx.calls)
+
+
+# ---------------------------------------------------------------- the bundled seat-picker demo
+def test_demo_barriers_differ_per_person(pw):
+    pg = _page(pw, demo.resolve("demo")[0])
+    seen = {pid: B.observe(pg, PERSONAS[pid])["text"] for pid in PERSONAS}
+    assert "coloured green" in seen["first_timer"] and "coloured red" in seen["first_timer"]
+    assert "coloured green" not in seen["colourblind"] and "coloured brownish" in seen["colourblind"]
+    assert "Row C" not in seen["keyboard"] and 'button "Buy tickets"' in seen["keyboard"]   # seats are not controls
+    assert seen["low_vision"].count("[text too small or faint to read]") >= 8               # row letters, legend
+    assert "unlabelled square, 14x14px" in seen["shaky"]
+    pg.close()
+
+
+def test_fixed_demo_works_for_everyone(pw):
+    pg = _page(pw, demo.resolve("demo:fixed")[0])
+    sr = B.observe(pg, PERSONAS["keyboard"])["text"]
+    assert 'button "Row C, seat 7, available"' in sr
+    low = B.observe(pg, PERSONAS["low_vision"])["text"]
+    assert "faint" not in low
+    # keyboard path: Tab into the map, arrows to C7, select C7 and C8, Tab to Buy
+    pg.keyboard.press("Tab")
+    for k in ["ArrowDown", "ArrowDown", "ArrowRight", "ArrowRight", "ArrowRight", "ArrowRight", "Enter",
+              "ArrowRight", "Enter", "Tab", "Enter"]:
+        pg.keyboard.press(k)
+    assert "You're going" in pg.inner_text("body")
+    pg.close()
+
+
+def test_custom_personas_combine_enforced_traits():
+    ps = pick(None, [{"name": "Priya, 80", "about": "Retired teacher.", "traits": ["low_vision", "keyboard_only"]}])
+    assert len(ps) == 6
+    p = ps[-1]
+    assert not p.mouse and p.min_font_px == 13.5 and p.first_name == "Priya" and p.condition == "Low vision + Keyboard only"
+    with pytest.raises(ValueError):
+        pick(None, [{"name": "X", "traits": ["telepathy"]}])

@@ -351,7 +351,9 @@ def run_test(url: str, task: str, complete: Complete, personas: list[Persona], d
     variants = [("before", url)] + ([("after", compare_url)] if compare_url else [])
     meta = {"id": run_id, "url": url, "compare_url": compare_url, "task": task, "title": title or label or url,
             "success_text": success_text, "created": time.time(), "personas_order": [p.id for p in personas],
-            "variants": [v for v, _ in variants], "viewport": list(viewport)}
+            "variants": [v for v, _ in variants], "viewport": list(viewport),
+            "people": [{"id": p.id, "name": p.name, "first": p.first_name, "initials": p.initials, "icon": p.icon,
+                        "condition": p.condition, "blurb": p.blurb} for p in personas]}
     state = RunState(run_dir, meta)
     jobs = [(v, u, p) for v, u in variants for p in personas]
     deadline = time.time() + time_budget if time_budget else 0
