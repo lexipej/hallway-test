@@ -78,7 +78,7 @@ def parse_reply(raw: str) -> dict:
     if m:
         t = re.search(r'"thought"\s*:\s*"((?:[^"\\]|\\.)*)', text)
         return {"thought": (t.group(1) if t else "").strip()[:240], "action": m.group(1).strip()}
-    m = re.search(r"\b(click \d+|type \d+ .+|press \S+|type_focused .+|scroll (?:up|down)|done|give_up.*)", text)
+    m = re.search(r"\b(click \d+|type \d+ .+|press \S+|type_focused .+|scroll (?:up|down|to top|to bottom)|done|give_up.*)", text)
     if m:
         return {"thought": "", "action": m.group(1).strip()}
     return {"thought": "", "action": "", "error": f"could not read a JSON action from: {text[:120]!r}"}
@@ -100,6 +100,8 @@ point to concrete evidence above, and give one specific fix a developer can appl
 Severity must match what happened in THIS run: "blocker" only if it actually stopped someone from finishing;
 "major" if it clearly slowed or confused someone; an automated check that no one ran into is at most "minor".
 Never call something a blocker for a person who finished. Prefer fewer, well-evidenced findings over a long list.
+Only state facts about the page that appear above (the people's words, their steps, or the automated checks).
+Do not guess at the page's markup (labels, placeholders, ARIA) beyond what the checks report.
 Reply with ONLY JSON: {{"findings": [{{"title": "...", "severity": "blocker|major|minor", "who": ["persona name", ...],
 "evidence": "...", "fix": "..."}}]}}"""
 

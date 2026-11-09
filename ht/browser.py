@@ -103,7 +103,9 @@ PROBE_JS = r"""
               pressed: f.getAttribute('aria-pressed') || '', ref: f.getAttribute('data-ht') };
   }
   const body = (document.body && document.body.innerText) || '';
+  const maxY = Math.max(0, document.documentElement.scrollHeight - innerHeight);
   return { title: document.title, url: location.href, items: out, focus, below, scrollY: Math.round(scrollY),
+           scrollPct: maxY ? Math.round(100 * scrollY / maxY) : -1,
            textLen: body.length, text: body.slice(0, 4000) };
 }
 """
@@ -113,6 +115,7 @@ DEUT_SVG = ('<svg id="ht-svg" aria-hidden="true" style="position:absolute;width:
             '-0.012 0.043 0.969 0 0  0 0 0 1 0"/></filter></svg>')
 
 MOUSE_ACTIONS = ("click <ref> | type <ref> <text> | select <ref> <option text> | scroll down | scroll up | "
+                 "scroll to top | scroll to bottom | "
                  "done | give_up <reason>")
 KEY_ACTIONS = ("press Tab | press Shift+Tab | press Enter | press Space | press ArrowDown | press ArrowUp | "
                "press Escape | press Control+A | type_focused <text> | done | give_up <reason>")
@@ -201,7 +204,16 @@ def observe(page, p) -> dict:
             d += " (selected, typing cursor is here)"
         if d:
             lines.append(d)
-    more = "\n(the page continues below; you can scroll down)" if raw.get("below") else ""
+    pct = raw.get("scrollPct", -1)
+    if pct < 0:
+        where = "\n(the whole page fits on the screen)"
+    elif pct <= 2:
+        where = "\n(you are at the top of the page; it continues below)"
+    elif pct >= 98:
+        where = "\n(you are at the bottom of the page)"
+    else:
+        where = f"\n(you are about {pct}% of the way down the page)"
+    more = where
     return {"text": f"PAGE: {raw['title']}\nWHAT YOU SEE:\n" + "\n".join(lines) + more, "raw": raw}
 
 
@@ -246,6 +258,10 @@ def act(page, p, obs: dict, action: str, rng: random.Random) -> dict:
             return {"kind": "select", "click": [it["x"], it["y"]], "aimed": [it["x"], it["y"]]}
         if a in ("scroll down", "scroll up"):
             page.mouse.wheel(0, 600 if a.endswith("down") else -600)
+            return {"kind": "scroll"}
+        if a in ("scroll to top", "scroll to bottom"):  # a quick fling, as people do on long pages
+            page.evaluate("(down) => window.scrollTo(0, down ? document.documentElement.scrollHeight : 0)",
+                          a.endswith("bottom"))
             return {"kind": "scroll"}
         raise ActionError(f"not an action you can take; allowed: {MOUSE_ACTIONS}")
     if m := re.fullmatch(r"press\s+(.+)", a):

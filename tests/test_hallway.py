@@ -387,3 +387,18 @@ def test_fallback_findings_follow_the_run():
     assert got[0]["severity"] == "blocker" and "Aling Nena" in got[0]["title"]
     mouse_only = next(f for f in got if f["title"].startswith("Controls"))
     assert mouse_only["severity"] != "blocker"           # Jo finished, so it can't be a blocker
+
+
+def test_long_pages_tell_people_where_they_are(pw, tmp_path):
+    page = tmp_path / "long.html"
+    page.write_text("<body style='font:16px sans-serif'><p>Top</p><div style='height:4000px'></div><button>Finish</button></body>",
+                    encoding="utf-8")
+    pg = _page(pw, page.as_uri())
+    p = PERSONAS["first_timer"]
+    assert "top of the page" in B.observe(pg, p)["text"]
+    B.act(pg, p, B.observe(pg, p), "scroll to bottom", random.Random(1))
+    obs = B.observe(pg, p)
+    assert "bottom of the page" in obs["text"] and "Finish" in obs["text"]
+    B.act(pg, p, obs, "scroll to top", random.Random(1))
+    assert "top of the page" in B.observe(pg, p)["text"]
+    pg.close()
