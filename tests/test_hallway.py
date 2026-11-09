@@ -356,3 +356,34 @@ def test_stuck_persona_does_not_hold_the_run(tmp_path, monkeypatch):
     with pytest.raises(RuntimeError, match="No one could start"):
         R.run_test("http://127.0.0.1:9/", "x", lambda m: "", pick(["first_timer"]), tmp_path, time_budget=1)
     assert _t.time() - t0 < 30
+
+
+def test_labels_are_not_controls_and_focus_counts_as_change(pw, tmp_path):
+    page = tmp_path / "login.html"
+    page.write_text("""<!doctype html><body style="font:16px sans-serif"><form>
+      <label for="u" style="cursor:pointer">Username</label><input id="u" style="width:200px;height:30px">
+      <label for="pw" style="cursor:pointer">Password</label><input id="pw" type="password" style="width:200px;height:30px">
+      <button type="button">Login</button></form></body>""", encoding="utf-8")
+    pg = _page(pw, page.as_uri())
+    assert not [i for i in B.audit(B.probe(pg)) if i["text"] in ("Username", "Password")]
+    obs = B.observe(pg, PERSONAS["first_timer"])
+    ref = next(i["ref"] for i in obs["raw"]["items"] if i["tag"] == "INPUT" and i["label"] == "Password")
+    B.act(pg, PERSONAS["first_timer"], obs, f"click {ref}", random.Random(1))
+    after = B.observe(pg, PERSONAS["first_timer"])
+    assert after["raw"]["focus"] != obs["raw"]["focus"]
+    assert "typing cursor is here" in after["text"]
+    pg.close()
+
+
+def test_fallback_findings_follow_the_run():
+    from ht.run import findings
+    from ht.personas import PERSONAS as P
+    base = {"variant": "before", "steps": [], "quote": "", "dead_clicks": 0, "n_steps": 3, "reason": ""}
+    results = [dict(base, persona="keyboard", status="success", n_steps=8,
+                    audit={"x": [{"kind": "not_keyboard", "text": "×", "detail": "d"}]}),
+               dict(base, persona="shaky", status="gave_up", quote="I can't hit it", audit={})]
+    got, src = findings("t", results, P, None)
+    assert src == "checks"
+    assert got[0]["severity"] == "blocker" and "Aling Nena" in got[0]["title"]
+    mouse_only = next(f for f in got if f["title"].startswith("Controls"))
+    assert mouse_only["severity"] != "blocker"           # Jo finished, so it can't be a blocker

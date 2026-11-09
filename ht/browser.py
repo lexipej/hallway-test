@@ -35,7 +35,8 @@ PROBE_JS = r"""
     if (['SCRIPT','STYLE','NOSCRIPT','svg','path'].includes(tag)) continue;
     const own = [...el.childNodes].filter(c => c.nodeType === 3).map(c => c.textContent.trim()).join(' ').trim();
     const role = el.getAttribute('role') || '';
-    const clickable = interactive.has(tag) || roles.has(role) || cs.cursor === 'pointer' || el.hasAttribute('onclick');
+    // A <label> is text that focuses its field; keyboard users reach the field itself, so it is not a control.
+    const clickable = tag !== 'LABEL' && (interactive.has(tag) || roles.has(role) || cs.cursor === 'pointer' || el.hasAttribute('onclick'));
     const isImg = tag === 'IMG';
     if (!own && !clickable && !isImg) continue;
     if (clickable && !interactive.has(tag) && el.parentElement && el.parentElement.closest('button,a,[role=button]')) continue;
@@ -192,7 +193,14 @@ def observe(page, p) -> dict:
         text = (f"PAGE: {raw['title']}\nSCREEN READER (everything it can announce on this page):\n{tree}\n\n"
                 f"KEYBOARD FOCUS IS ON: {focus}")
         return {"text": text, "raw": raw}
-    lines = [d for d in (_describe_item(it, p) for it in raw["items"]) if d]
+    focus_ref = str((raw.get("focus") or {}).get("ref") or "")
+    lines = []
+    for it in raw["items"]:
+        d = _describe_item(it, p)
+        if d and focus_ref and str(it["ref"]) == focus_ref and it["tag"] in ("INPUT", "TEXTAREA", "SELECT"):
+            d += " (selected, typing cursor is here)"
+        if d:
+            lines.append(d)
     more = "\n(the page continues below; you can scroll down)" if raw.get("below") else ""
     return {"text": f"PAGE: {raw['title']}\nWHAT YOU SEE:\n" + "\n".join(lines) + more, "raw": raw}
 

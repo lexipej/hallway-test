@@ -240,7 +240,8 @@ def run_persona(url: str, p: Persona, variant: str, task: str, complete: Complet
                 except Exception:
                     page.wait_for_timeout(800)
                     after = B.probe(page)
-                changed = B.fingerprint(after) != fp or (res["kind"] == "key" and after.get("focus") != obs["raw"].get("focus"))
+                # Moving the typing cursor into a field is a visible change too (a tap on an empty field "worked").
+                changed = B.fingerprint(after) != fp or after.get("focus") != obs["raw"].get("focus")
                 rec["changed"] = changed
                 outcome = "the screen changed" if changed else "nothing seemed to happen"
                 brain.record(action, thought, outcome)
@@ -289,14 +290,15 @@ def findings(task: str, results: list[dict], personas: dict, complete: Optional[
         for r in results:
             p = personas[r["persona"]]
             words = "; ".join(f"step {s['i'] + 1}: {s['action']} — \"{s['thought']}\""
-                              for s in r["steps"] if s.get("thought"))[:900]
+                              for s in r["steps"] if s.get("thought"))[:600]
             outcomes.append(f"- {p.name} ({r['variant']}): {summarise(r)}. {('Reason: ' + r['reason']) if r['reason'] else ''} {words}")
         prompt = FINDINGS_PROMPT.format(task=task, outcomes="\n".join(outcomes), audit="\n".join(audit_lines) or "(none)")
         try:
-            raw = complete([{"role": "user", "content": prompt}])
+            sysmsg = {"role": "system", "content": "You are a senior UX researcher. Reply with one JSON object only."}
+            raw = complete([sysmsg, {"role": "user", "content": prompt}])
             if not (raw or "").strip():  # reasoning models can spend the whole budget thinking: ask again, briefly
-                raw = complete([{"role": "user", "content": prompt + "\n\nAnswer straight away with the JSON; keep "
-                                 "any reasoning very short."}])
+                raw = complete([sysmsg, {"role": "user", "content": prompt[:6000] + "\n\nAnswer straight away with "
+                                 "the JSON; keep any reasoning very short."}])
             got = parse_findings(raw)
             if got:
                 return got, "model"
@@ -307,11 +309,36 @@ def findings(task: str, results: list[dict], personas: dict, complete: Optional[
     by_kind: dict[str, list] = {}
     for (k, t), it in issues.items():
         by_kind.setdefault(k, []).append(t)
-    order = sorted(by_kind, key=lambda k: ["blocker", "major", "minor"].index(FIX_HINTS[k][1]))
     ran = {r["persona"] for r in results}
-    return [{"title": FIX_HINTS[k][0], "severity": FIX_HINTS[k][1],
-             "who": [personas[p].name.split(",")[0] for p in WHO.get(k, []) if p in ran],
-             "evidence": ", ".join(f"'{t}'" for t in by_kind[k][:4]), "fix": FIX_HINTS[k][2]} for k in order[:5]], "checks"
+    status = {r["persona"]: r["status"] for r in results if r["variant"] == "before"}
+    steps = sorted(r["n_steps"] for r in results if r["variant"] == "before" and r["status"] == "success") or [0]
+    median = steps[len(steps) // 2]
+    out = []
+    for k in by_kind:
+        who = [p for p in WHO.get(k, []) if p in ran]
+        # Severity follows what happened in this run, not the rule's worst case.
+        if any(status.get(p) not in (None, "success") for p in who):
+            sev = FIX_HINTS[k][1]
+        elif any(r["persona"] in who and r["n_steps"] > max(4, median * 1.5) for r in results):
+            sev = "major" if FIX_HINTS[k][1] != "minor" else "minor"
+        else:
+            sev = "minor"
+        out.append({"title": FIX_HINTS[k][0], "severity": sev, "who": [personas[p].name.split(",")[0] for p in who],
+                    "evidence": ", ".join(f"'{t}'" for t in by_kind[k][:4]) + ("" if sev != "minor" or not who else
+                                "; nobody was held up by it in this run"), "fix": FIX_HINTS[k][2]})
+    # What people actually ran into comes first: give-ups and taps that did nothing.
+    for r in results:
+        p = personas[r["persona"]].name.split(",")[0]
+        if r["status"] in ("gave_up", "false_done", "out_of_steps"):
+            out.append({"title": f"{p} could not finish", "severity": "blocker", "who": [p],
+                        "evidence": f"In their words: “{r['quote']}”", "fix": "Watch the replay to see where they got stuck."})
+        elif r["dead_clicks"] >= 2:
+            out.append({"title": f"Taps that did nothing for {p}", "severity": "major", "who": [p],
+                        "evidence": f"{r['dead_clicks']} taps changed nothing on screen", "fix":
+                        "Make tap targets larger and give every tap visible feedback."})
+    rank = {"blocker": 0, "major": 1, "minor": 2}
+    out.sort(key=lambda f: rank.get(f["severity"], 2))
+    return out[:5], "checks"
 
 
 def run_test(url: str, task: str, complete: Complete, personas: list[Persona], data_dir: Path,
