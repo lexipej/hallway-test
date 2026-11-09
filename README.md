@@ -77,8 +77,10 @@ Ask Hermes in plain words, or call the `hallway_test` tool:
 - Python dependency: `playwright` (installed with the plugin). For the browser it uses Playwright's Chromium if
   present, otherwise the Microsoft Edge or Google Chrome already on your machine. It never downloads a browser
   itself; to use Playwright's Chromium, run `python -m playwright install chromium` in the Hermes environment.
-- Optional settings (`plugins.entries.hallway-test.settings`): `max_steps` (16), `parallel` (3, max 6),
-  and `time_budget_seconds` (330).
+- Settings (Hermes Desktop: Settings → Plugins → hallway-test): `max_steps` (16), `parallel` (3 browsers at a time,
+  max 6) and `time_budget_seconds` (330, so a run always answers inside Hermes's tool timeout).
+- Gentle on your machine: animated pages are slowed to about 5 frames a second for the testers, audio is muted, and a
+  browser only starts when at least 1.2 GB of memory is free.
 
 A run makes one model call per person per step plus one for the findings: typically 40–120 short calls and
 1–4 minutes for five people (twice that for before/after).
@@ -100,8 +102,9 @@ A run makes one model call per person per step plus one for the findings: typica
 
 Simulated people are not real users. The low-vision and colour-blind views are models (font size, contrast and a
 deuteranopia mapping), and the screen-reader view is Chromium's accessibility tree rather than NVDA or VoiceOver.
-Hallway Test is for catching barriers early and often; it does not replace testing with disabled people.
-Pages behind CAPTCHAs or SSO need a test login you pass in `facts`.
+Contrast is only judged on solid backgrounds (text on images or gradients is assumed readable), and results vary a
+little from run to run because a model makes each decision. Hallway Test is for catching barriers early and often;
+it does not replace testing with disabled people. Pages behind CAPTCHAs or SSO need a test login you pass in `facts`.
 
 ## Development
 
@@ -110,7 +113,8 @@ cd tests
 python -m pytest -q
 ```
 
-The tests use the bundled demo and a rule-based stand-in for the model, so they run offline.
+The tests use the bundled demo, a small fixture app with known barriers, and a rule-based stand-in for the model,
+so they run offline.
 
 Built with AI assistance (Claude, Codex) for the Nous Research Hermes Agent plugin hackathon. The portraits were made with
 Codex image generation and recoloured for the report. Report typefaces: Barlow Condensed and Space Mono, both under the

@@ -480,3 +480,14 @@ def test_unreadable_reply_is_retried_on_the_same_screen(tmp_path):
                    max_steps=4)
     r = res["results"][0]
     assert r["status"] == "gave_up" and r["n_steps"] == 1
+
+
+def test_sighted_keyboard_only_people_see_focus(pw):
+    from ht.personas import custom
+    p = custom({"name": "Priya, 80", "traits": ["keyboard_only"]}, 0)
+    pg = _page(pw, demo.resolve("demo:fixed")[0])
+    assert "KEYBOARD FOCUS IS ON: nothing yet" in B.observe(pg, p)["text"]
+    pg.keyboard.press("Tab")
+    obs = B.observe(pg, p)["text"]
+    assert "KEYBOARD FOCUS IS ON: button 'Row A, seat 3, available'" in obs and "(keyboard focus is here)" in obs
+    pg.close()

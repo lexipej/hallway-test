@@ -37,7 +37,7 @@ const caps = { ...mono, fontSize: 10.5, fontWeight: 700, letterSpacing: '.08em',
 const DONE = new Set(['success', 'gave_up', 'false_done', 'out_of_steps', 'error'])
 
 const muted = { color: 'var(--ui-text-tertiary)' }
-const line = { border: '1px solid var(--ui-stroke-secondary)', borderRadius: 2 }
+const line = { border: '1px solid var(--ui-stroke-secondary)', borderRadius: 4 }
 
 function ago(t) {
   if (!t) return ''

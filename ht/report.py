@@ -94,6 +94,7 @@ table.res{border-collapse:collapse;width:100%}
 .sum{margin-top:8px;font:11.5px var(--mono);color:var(--ink3)}
 .film{display:flex;gap:6px;margin-top:14px}
 .film .im{width:52px;height:106px;background-size:cover;background-position:top;border:1.5px solid var(--navy)}
+.film{flex-wrap:wrap} .film .im.desk{width:96px;height:60px}
 details{margin-top:12px} summary{cursor:pointer;font:700 12px var(--mono);letter-spacing:.04em;text-transform:uppercase;color:var(--blue)}
 .steps{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:12px;margin-top:12px}
 .st2{font-size:12.5px;color:var(--ink2)} .st2 .im{width:100%;aspect-ratio:420/860;background-size:cover;background-position:top;border:1.5px solid var(--navy);position:relative}
@@ -200,9 +201,10 @@ def _order(res: dict, variant: str) -> list:
 def _subject(r: dict, person: dict, img: Images, desk: bool, vw: int, vh: int, av: dict) -> str:
     steps = [s for s in r["steps"] if s.get("shot")]
     picks = steps[:: max(1, len(steps) // 4)][:4] if steps else []
-    film = "".join(f'<div class="im {img(s["shot"])}"></div>' for s in picks)
+    shape = "im desk" if desk else "im"
+    film = "".join(f'<div class="{shape} {img(s["shot"])}"></div>' for s in picks)
     if r.get("final_shot"):
-        film += f'<div class="im {img(r["final_shot"])}"></div>'
+        film += f'<div class="{shape} {img(r["final_shot"])}"></div>'
     rows = []
     for s in r["steps"]:
         tap = ""
@@ -357,6 +359,7 @@ h1{font:800 60px/.92 var(--head);text-transform:uppercase;color:var(--blue);marg
 .p .av{width:72px;height:72px;box-shadow:4px 4px 0 var(--pink)}
 .p .nm{font:800 30px/1 var(--head);text-transform:uppercase;margin-bottom:6px}
 .res2{display:flex;align-items:center;gap:8px} .res2 .to{font:700 20px var(--head);color:var(--pink)}
+h1.long{font-size:46px} .more{font:700 12px var(--mono);text-transform:uppercase;color:var(--ink3);padding-left:90px}
 """
 
 
@@ -364,7 +367,8 @@ def build_card(res: dict, personas: dict) -> str:
     host = urlparse(res["url"]).netloc or res["url"]
     people, av = _people(res), {}
     rows = []
-    for r in _order(res, "before")[:5]:
+    everyone = _order(res, "before")
+    for r in everyone[:5]:
         person = people.get(r["persona"], {"id": r["persona"], "name": r["persona"], "first": r["persona"], "initials": "?",
                                            "icon": "new", "condition": ""})
         after = next((a for a in res["results"] if a["variant"] == "after" and a["persona"] == r["persona"]), None)
@@ -372,9 +376,11 @@ def build_card(res: dict, personas: dict) -> str:
         rows.append(f'<div class="p">{avatar(person, av)}<div><div class="nm">{_esc(person.get("first") or person["name"])}</div>'
                     f'{cond(person)}</div><div class="res2">{res_html}</div></div>')
     return (f'<!doctype html><html><head><meta charset="utf-8"><style>{fonts_css()}{CARD_CSS}</style></head><body><div class="c"><div class="l">'
-            f'<div class="brand">Hallway / Test</div><h1>{_esc(res.get("title") or host)}</h1>'
+            f'<div class="brand">Hallway / Test</div><h1 class="{"long" if len(res.get("title") or host) > 26 else ""}">'
+            f'{_esc(res.get("title") or host)}</h1>'
             f'<div class="task">{_esc(res["task"])}</div>{_nums(res)}</div>'
-            f'<div class="r">{"".join(rows)}</div></div></body></html>')
+            f'<div class="r">{"".join(rows)}' + (f'<div class="more">+ {len(everyone) - 5} more in the report</div>'
+                                                 if len(everyone) > 5 else "") + '</div></div></body></html>')
 
 
 def write_report(run_dir: Path, res: dict, personas: dict, viewport=(420, 860)) -> dict:

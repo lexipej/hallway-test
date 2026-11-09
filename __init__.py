@@ -26,13 +26,13 @@ SCHEMA = {
         "hears only the accessibility tree), a red-green colour-blind user, and a user with a hand tremor (taps land "
         "off target). Each one tries the task in their own real browser, one decision at a time; you get who finished, "
         "who gave up and why in their own words, taps that did nothing, prioritised findings with fixes, a full HTML "
-        "report with step-by-step replays, and a summary card image. Use url='demo' (and compare_url='demo:fixed') to "
-        "try the bundled coffee-shop app. Takes 1-5 minutes. Works on http(s) pages the machine can reach, including "
+        "report with step-by-step replays, and a summary card image. You can add up to 3 custom people built from the "
+        "same enforced traits. Use url='demo' (and compare_url='demo:fixed') to try the bundled concert seat picker. Takes 1-5 minutes. Works on http(s) pages the machine can reach, including "
         "localhost dev servers."),
     "parameters": {
         "type": "object",
         "properties": {
-            "url": {"type": "string", "description": "Page to test: http(s)://… or file:///…, or 'demo' for the bundled Kapé app."},
+            "url": {"type": "string", "description": "Page to test: http(s)://… or file:///…, or 'demo' for the bundled seat-picker app ('demo:fixed' for its repaired version)."},
             "task": {"type": "string", "description": "What the people should try to do, in plain words, e.g. "
                      "'Sign up for the newsletter with the email sam@example.com'. Optional for the demo."},
             "success_text": {"type": "string", "description": "Text that appears on the page only when the task is "
@@ -100,8 +100,6 @@ def _make_complete(ctx, max_tokens: int, timeout: float = 90):
 
 
 def run_tool(ctx, args: dict) -> dict:
-    from .ht.run import run_test
-
     url, is_demo = demo.resolve(args.get("url", ""))
     if not url:
         raise ValueError("url is required")
@@ -180,7 +178,7 @@ def register(ctx) -> None:
         arg = (raw or "").strip()
         if arg in ("", "help"):
             return ("Hallway Test: ask me to test a page, e.g. “hallway test http://localhost:3000 — sign up with "
-                    "sam@example.com; success text: Welcome”.\n/hallway demo runs the bundled coffee app before and "
+                    "sam@example.com; success text: Welcome”.\n/hallway demo runs the bundled seat-picker app before and "
                     "after fixes. /hallway runs lists recent runs.")
         if arg == "runs":
             runs = sorted((_data_dir() / "runs").glob("*/result.json"), reverse=True)[:8]
@@ -200,7 +198,7 @@ def register(ctx) -> None:
                 except Exception:  # noqa: BLE001 - the run's state.json records the failure
                     log.exception("hallway demo failed")
             threading.Thread(target=work, name="hallway-demo-run", daemon=True).start()
-            return ("Hallway Test started: five people are trying the demo coffee app, before and after fixes. "
+            return ("Hallway Test started: five people are trying the demo seat picker, before and after fixes. "
                     "Watch it live on the Hallway Test page in the sidebar (about 1-3 minutes), or type "
                     "/hallway runs to see results here.")
         return "Unknown option. Use /hallway, /hallway demo or /hallway runs."

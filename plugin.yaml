@@ -7,7 +7,8 @@ description: >-
   visitor, a 72-year-old with low vision, a blind screen-reader user on keyboard only, a red-green
   colour-blind user and a user with a hand tremor. Each drives a real browser one decision at a time on your
   own model; you get who finished, who gave up and why in their own words, dead taps, prioritised fixes, a
-  report with step-by-step replays and a shareable summary card. Includes a Desktop page that follows runs live.
+  report with step-by-step replays and a shareable summary card. Add your own people from the same enforced
+  traits. Includes a Desktop page that follows runs live and a bundled demo app.
 author: lexipej
 license: MIT
 homepage: https://github.com/lexipej/hallway-test

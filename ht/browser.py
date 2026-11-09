@@ -8,7 +8,6 @@ from __future__ import annotations
 import hashlib
 import random
 import re
-from typing import Any
 
 PROBE_JS = r"""
 () => {
@@ -206,8 +205,11 @@ def observe(page, p) -> dict:
     lines = []
     for it in raw["items"]:
         d = _describe_item(it, p)
-        if d and focus_ref and str(it["ref"]) == focus_ref and it["tag"] in ("INPUT", "TEXTAREA", "SELECT"):
-            d += " (selected, typing cursor is here)"
+        if d and focus_ref and str(it["ref"]) == focus_ref:
+            if it["tag"] in ("INPUT", "TEXTAREA", "SELECT"):
+                d += " (selected, typing cursor is here)"
+            elif not p.mouse:
+                d += " (keyboard focus is here)"
         if d:
             lines.append(d)
     pct = raw.get("scrollPct", -1)
@@ -220,6 +222,9 @@ def observe(page, p) -> dict:
     else:
         where = f"\n(you are about {pct}% of the way down the page)"
     more = where
+    if not p.mouse:  # sighted but keyboard-only: they can see the focus ring
+        f = raw.get("focus")
+        more += "\nKEYBOARD FOCUS IS ON: " + (f"{f['role'] or f['tag']} '{f['name']}'" if f else "nothing yet (start of page)")
     return {"text": f"PAGE: {raw['title']}\nWHAT YOU SEE:\n" + "\n".join(lines) + more, "raw": raw}
 
 
