@@ -8,6 +8,7 @@ import { jsx, jsxs } from 'react/jsx-runtime'
 const ID = 'hallway-test'
 const $selected = atom(null)
 let rest = null
+let os = null
 
 const PEOPLE = {
   first_timer: { name: 'Mara', who: 'first-time visitor', initials: 'M', hue: '#b4532a' },
@@ -155,9 +156,20 @@ function ReportView({ id }) {
     const w = frame.current && frame.current.contentWindow
     if (w && q.data.images) w.postMessage({ type: 'hallway-images', css: q.data.images }, '*')
   }
-  return jsx(SandboxedFrame, {
-    ref: frame, onLoad: post, src: q.data.src, title: 'Hallway Test report',
-    style: { width: '100%', height: '100%', minHeight: 600, borderRadius: 12 }
+  const fileUrl = q.data.path ? 'file:///' + q.data.path.replace(/\\/g, '/').replace(/^\/+/, '') : ''
+  const openIn = () => os && os.openExternal(fileUrl).then(ok => ok || host.notify({ kind: 'warning', message: 'Could not open the report. Use Show file instead.' }))
+  return jsxs('div', {
+    style: { display: 'flex', flexDirection: 'column', gap: 8, flex: 1, minHeight: 0 },
+    children: [
+      os && q.data.path && jsxs('div', { style: { display: 'flex', gap: 8, justifyContent: 'flex-end' }, children: [
+        jsx(Button, { size: 'sm', variant: 'outline', onClick: openIn, children: 'Open in browser' }),
+        jsx(Button, { size: 'sm', variant: 'ghost', onClick: () => os.revealPath(q.data.path), children: 'Show file' })
+      ] }),
+      jsx(SandboxedFrame, {
+        ref: frame, onLoad: post, src: q.data.src, title: 'Hallway Test report',
+        style: { width: '100%', flex: 1, minHeight: 600, borderRadius: 12 }
+      })
+    ]
   })
 }
 
@@ -226,6 +238,7 @@ export default {
   name: 'Hallway Test',
   register(ctx) {
     rest = ctx.rest
+    os = ctx.os || null
     ctx.registerMany([
       { id: 'page', area: ROUTES_AREA, data: { path: '/hallway' }, render: () => jsx(HallwayPage, {}) },
       { id: 'nav', area: SIDEBAR_NAV_AREA, order: 60, data: { path: '/hallway', label: 'Hallway Test', codicon: 'person' } },

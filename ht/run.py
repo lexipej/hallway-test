@@ -240,6 +240,9 @@ def findings(task: str, results: list[dict], personas: dict, complete: Optional[
         prompt = FINDINGS_PROMPT.format(task=task, outcomes="\n".join(outcomes), audit="\n".join(audit_lines) or "(none)")
         try:
             raw = complete([{"role": "user", "content": prompt}])
+            if not (raw or "").strip():  # reasoning models can spend the whole budget thinking: ask again, briefly
+                raw = complete([{"role": "user", "content": prompt + "\n\nAnswer straight away with the JSON; keep "
+                                 "any reasoning very short."}])
             got = parse_findings(raw)
             if got:
                 return got, "model"

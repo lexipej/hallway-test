@@ -75,7 +75,7 @@ async def report(run_id: str):
     images = "".join(_IMG_RULE.findall(html))
     html = _IMG_RULE.sub("", html).replace('<style id="ht-img"></style>', "").replace("</head>", _RECEIVER + "</head>", 1)
     return {"src": "data:text/html;charset=utf-8;base64," + base64.b64encode(html.encode("utf-8")).decode(),
-            "images": images, "card": _b64(d / "card.png", "image/png")}
+            "images": images, "card": _b64(d / "card.png", "image/png"), "path": str(p.resolve())}
 
 
 _IMG_RULE = re.compile(r"\.i[0-9a-f]{10}\{background-image:url\(data:image/jpeg;base64,[A-Za-z0-9+/=]*\)\}")
