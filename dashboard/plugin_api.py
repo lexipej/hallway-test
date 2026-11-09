@@ -69,5 +69,16 @@ async def report(run_id: str):
     p = d / "report.html"
     if not p.exists():
         raise HTTPException(409, "report not ready")
-    return {"src": "data:text/html;charset=utf-8;base64," + base64.b64encode(p.read_bytes()).decode(),
-            "card": _b64(d / "card.png", "image/png")}
+    html = p.read_text(encoding="utf-8")
+    # Chromium refuses data: URLs over 2 MB, and screenshots make a report bigger than that. Ship the page
+    # without its screenshot stylesheet and let the Desktop page post the screenshots in after it loads.
+    images = "".join(_IMG_RULE.findall(html))
+    html = _IMG_RULE.sub("", html).replace('<style id="ht-img"></style>', "").replace("</head>", _RECEIVER + "</head>", 1)
+    return {"src": "data:text/html;charset=utf-8;base64," + base64.b64encode(html.encode("utf-8")).decode(),
+            "images": images, "card": _b64(d / "card.png", "image/png")}
+
+
+_IMG_RULE = re.compile(r"\.i[0-9a-f]{10}\{background-image:url\(data:image/jpeg;base64,[A-Za-z0-9+/=]*\)\}")
+_RECEIVER = ("<script>addEventListener('message',function(e){var d=e.data;if(d&&d.type==='hallway-images'&&"
+             "typeof d.css==='string'&&!document.getElementById('ht-img')){var s=document.createElement('style');"
+             "s.id='ht-img';s.textContent=d.css;document.head.appendChild(s);}});</script>")

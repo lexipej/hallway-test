@@ -2,7 +2,7 @@
 // Plain ESM loaded uncompiled by Hermes Desktop: no JSX, only the three allowed imports.
 import * as sdk from '@hermes/plugin-sdk'
 import { host, ROUTES_AREA, SIDEBAR_NAV_AREA, PALETTE_AREA, useQuery, atom, useValue, Button, Input, Textarea, SandboxedFrame } from '@hermes/plugin-sdk'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { jsx, jsxs } from 'react/jsx-runtime'
 
 const ID = 'hallway-test'
@@ -57,7 +57,7 @@ function NewTest() {
   }
   const field = (label, el) => jsxs('label', { style: { display: 'grid', gap: 4, fontSize: 12, minWidth: 0 }, children: [jsx('span', { style: muted, children: label }), el] })
   return jsxs('div', {
-    style: { ...line, padding: 12, display: 'grid', gap: 8 },
+    style: { ...line, padding: 12, display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 8, minWidth: 0 },
     children: [
       jsx('div', { style: { fontWeight: 600, fontSize: 13 }, children: 'New test' }),
       field('Page', jsx(Input, { value: url, style: { width: '100%', boxSizing: 'border-box' }, placeholder: 'http://localhost:3000/signup', onChange: e => setUrl(e.target.value) })),
@@ -82,17 +82,17 @@ function NewTest() {
 function RunList({ runs, current }) {
   if (!runs.length) return jsx('div', { style: { ...muted, fontSize: 12, padding: '8px 2px' }, children: 'No runs yet. Try the demo.' })
   return jsx('div', {
-    style: { display: 'grid', gap: 4 },
+    style: { display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 4, minWidth: 0 },
     children: runs.map(r => jsxs('button', {
       type: 'button', onClick: () => $selected.set(r.id),
       style: {
-        textAlign: 'left', padding: '8px 10px', borderRadius: 10, cursor: 'pointer', background: 'transparent', color: 'inherit',
+        width: '100%', minWidth: 0, textAlign: 'left', padding: '8px 10px', borderRadius: 10, cursor: 'pointer', background: 'transparent', color: 'inherit',
         border: r.id === current ? '1px solid var(--ui-accent)' : '1px solid transparent'
       },
       children: [
         jsxs('div', { style: { display: 'flex', justifyContent: 'space-between', gap: 8, fontSize: 13 }, children: [
           jsx('span', { style: { fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }, children: r.title || r.url }),
-          jsx('span', { style: { fontVariantNumeric: 'tabular-nums' }, children: scoreText(r) })
+          jsx('span', { style: { fontVariantNumeric: 'tabular-nums', flex: 'none' }, children: scoreText(r) })
         ] }),
         jsx('div', { style: { ...muted, fontSize: 11.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }, children: `${ago(r.created)} · ${r.task || ''}` })
       ]
@@ -147,9 +147,18 @@ function LiveView({ run }) {
 
 function ReportView({ id }) {
   const q = useQuery({ queryKey: [ID, 'report', id], queryFn: () => rest(`/runs/${id}/report`), staleTime: Infinity })
+  const frame = useRef(null)
   if (q.isError) return jsx('div', { style: muted, children: 'Could not load the report.' })
   if (!q.data) return jsx('div', { style: muted, children: 'Loading report…' })
-  return jsx(SandboxedFrame, { src: q.data.src, title: 'Hallway Test report', style: { width: '100%', height: '100%', minHeight: 600, borderRadius: 12 } })
+  // The page arrives without screenshots (data: URLs are capped at 2 MB); post them in once it has loaded.
+  const post = () => {
+    const w = frame.current && frame.current.contentWindow
+    if (w && q.data.images) w.postMessage({ type: 'hallway-images', css: q.data.images }, '*')
+  }
+  return jsx(SandboxedFrame, {
+    ref: frame, onLoad: post, src: q.data.src, title: 'Hallway Test report',
+    style: { width: '100%', height: '100%', minHeight: 600, borderRadius: 12 }
+  })
 }
 
 function RunView({ id }) {
@@ -173,7 +182,7 @@ function HallwayPage() {
     style: { display: 'grid', gridTemplateColumns: '300px 1fr', height: '100%', minHeight: 0 },
     children: [
       jsxs('div', {
-        style: { borderRight: '1px solid var(--ui-stroke-secondary)', padding: 14, display: 'grid', gap: 14, alignContent: 'start', overflowY: 'auto' },
+        style: { borderRight: '1px solid var(--ui-stroke-secondary)', padding: 14, display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 14, alignContent: 'start', overflowY: 'auto', overflowX: 'hidden', minWidth: 0 },
         children: [
           jsxs('div', { children: [
             jsx('div', { style: { fontSize: 16, fontWeight: 600 }, children: 'Hallway Test' }),

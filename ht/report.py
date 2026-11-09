@@ -176,7 +176,8 @@ def build_html(res: dict, personas: dict, shots: Path, viewport=(420, 860)) -> s
 access) and abilities (mouse, keyboard, tremor) are enforced by code; the model only decides what each person does next.
 Simulated people are not a substitute for testing with real users.</div></div>"""
     return (f'<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width">'
-            f'<title>Hallway Test · {_esc(host)}</title><style>{CSS}{img.css()}</style></head><body>{body}</body></html>')
+            f'<title>Hallway Test · {_esc(host)}</title><style>{CSS}</style><style id="ht-img">{img.css()}</style></head>'
+            f'<body>{body}</body></html>')
 
 
 CARD_CSS = """

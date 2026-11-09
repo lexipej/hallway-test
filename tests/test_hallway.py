@@ -247,8 +247,12 @@ def test_backend_routes(tmp_path, monkeypatch):
     assert one["people"][0]["thumb"].startswith("data:image/jpeg;base64,")
     assert c.get(f"/runs/{d.name}/report").status_code == 409
     assert c.get("/runs/..%2F..%2Fetc").status_code == 404
-    (d / "report.html").write_text("<p>hi</p>")
-    assert c.get(f"/runs/{d.name}/report").json()["src"].startswith("data:text/html")
+    (d / "report.html").write_text('<html><head><style>a{}</style><style id="ht-img">.iabcdef0123{background-image:url(data:image/jpeg;base64,QUJD)}</style></head><p>hi</p></html>')
+    rep = c.get(f"/runs/{d.name}/report").json()
+    assert rep["src"].startswith("data:text/html") and rep["images"] == ".iabcdef0123{background-image:url(data:image/jpeg;base64,QUJD)}"
+    import base64 as b64
+    page = b64.b64decode(rep["src"].split(",", 1)[1]).decode()
+    assert "QUJD" not in page and "hallway-images" in page
 
 
 def test_all_model_errors_are_reported_not_scored(tmp_path, monkeypatch):
