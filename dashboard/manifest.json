@@ -1,0 +1,12 @@
+{
+  "name": "hallway-test",
+  "label": "Hallway Test",
+  "description": "Usability reports from simulated people with real, code-enforced limits.",
+  "icon": "Users",
+  "version": "0.1.0",
+  "api": "plugin_api.py",
+  "tab": {
+    "path": "/hallway-test",
+    "hidden": true
+  }
+}

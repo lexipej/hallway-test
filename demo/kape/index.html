@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Kapé — order ahead</title>
+<style>
+  :root { --brown:#6b3e26; --cream:#f7efe6; --ink:#2b1d14; }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: system-ui, sans-serif; background: var(--cream); color: var(--ink); }
+  header { background: var(--brown); color: #fff; padding: 14px 20px; display:flex; align-items:center; gap:10px; }
+  header h1 { font-size: 20px; margin: 0; letter-spacing: .5px; }
+  main { max-width: 460px; margin: 0 auto; padding: 18px; }
+  .card { background:#fff; border-radius: 14px; padding: 16px; margin-bottom: 14px; box-shadow: 0 1px 0 #e8dccf; }
+  .drinks { display:grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .drink { border: 2px solid #eadccd; border-radius: 12px; padding: 12px; cursor: pointer; background:#fff; text-align:left; font: inherit; }
+  .drink.sel { border-color: var(--brown); background: #fbf5ee; }
+  .drink b { display:block; font-size: 15px; } .drink span { font-size: 13px; color:#7a6658; }
+  .sizes { display:flex; gap: 14px; align-items:flex-end; margin-top: 6px; }
+  .size { border: 2px solid #eadccd; border-radius: 10px; background:#fff; cursor:pointer; padding: 6px 10px; }
+  .size.sel { border-color: var(--brown); }
+  .hint { font-size: 10px; color: #c9bcb0; margin-top: 6px; }
+  label { display:block; font-size: 14px; margin: 10px 0 4px; }
+  input { width:100%; padding: 10px; border: 1.5px solid #d9cabb; border-radius: 8px; font: inherit; }
+  input.bad { border-color: #e0413a; }
+  .place { margin-top: 16px; background: #d8d2cc; color: #f4f1ee; border-radius: 10px; padding: 14px; text-align:center; cursor:pointer; font-weight:600; user-select:none; }
+  .total { display:flex; justify-content:space-between; font-size: 15px; margin-top: 8px; }
+  .done { text-align:center; padding: 40px 10px; } .done h2 { margin: 0 0 6px; }
+  /* fixed variant */
+  .fixed .hint { font-size: 14px; color: #6f5a4a; }
+  .fixed .place { background: var(--brown); color: #fff; border: none; width: 100%; font: inherit; font-weight: 600; font-size: 16px; }
+  .fixed .err { color: #b3261e; font-size: 14px; margin-top: 4px; }
+  .size small { display:block; font-size: 15px; font-weight: 600; }
+</style>
+</head>
+<body>
+<header><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><path d="M4 9h12v5a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5V9z"/><path d="M16 10h1.5a2.5 2.5 0 0 1 0 5H16"/></svg><h1>Kapé</h1></header>
+<main id="app"></main>
+<script>
+const FIXED = new URLSearchParams(location.search).has('fixed');
+if (FIXED) document.body.classList.add('fixed');
+const drinks = [["Iced Latte", 150], ["Hot Americano", 120], ["Spanish Latte", 165], ["Ube Frappe", 180]];
+const sizes = [["Small", 0, 18], ["Medium", 20, 24], ["Large", 35, 30]];
+const st = { drink: null, size: null, step: 1 };
+const cup = h => `<svg width="${h}" height="${h + 6}" viewBox="0 0 24 30" fill="none" stroke="#6b3e26" stroke-width="2" aria-hidden="true"><path d="M5 6h14l-1.5 20a2 2 0 0 1-2 2h-7a2 2 0 0 1-2-2L5 6z"/></svg>`;
+function price() { const d = drinks.find(x => x[0] === st.drink); const s = sizes.find(x => x[0] === st.size); return (d ? d[1] : 0) + (s ? s[1] : 0); }
+function render() {
+  const app = document.getElementById('app');
+  if (st.step === 1) {
+    app.innerHTML = `
+      <div class="card"><h2 style="margin:0 0 10px;font-size:17px">Choose your drink</h2>
+        <div class="drinks">${drinks.map(([n, p]) => `<button class="drink ${st.drink === n ? 'sel' : ''}" data-d="${n}"><b>${n}</b><span>₱${p}</span></button>`).join('')}</div></div>
+      <div class="card"><h2 style="margin:0 0 6px;font-size:17px">Size</h2>
+        <div class="sizes">${sizes.map(([n, , h]) => FIXED
+          ? `<button class="size ${st.size === n ? 'sel' : ''}" data-s="${n}" aria-pressed="${st.size === n}">${cup(h)}<small>${n}</small></button>`
+          : `<div class="size ${st.size === n ? 'sel' : ''}" data-s="${n}">${cup(h)}</div>`).join('')}</div>
+        <div class="hint">Tap a cup to pick your size. Medium is +₱20, large +₱35.</div></div>
+      <div class="card"><div class="total"><span>Total</span><b>₱${price()}</b></div>
+        ${FIXED ? `<button class="place" id="next">Continue to pickup details</button>` : `<div class="place" id="next">Continue</div>`}
+        <div class="err" id="e1"></div></div>`;
+    app.querySelectorAll('[data-d]').forEach(b => b.onclick = () => { st.drink = b.dataset.d; render(); });
+    app.querySelectorAll('[data-s]').forEach(b => b.onclick = () => { st.size = b.dataset.s; render(); });
+    document.getElementById('next').onclick = () => {
+      if (!st.drink || !st.size) { if (FIXED) document.getElementById('e1').textContent = 'Pick a drink and a size first.'; return; }
+      st.step = 2; render();
+    };
+  } else if (st.step === 2) {
+    app.innerHTML = `
+      <div class="card"><h2 style="margin:0 0 6px;font-size:17px">Pickup details</h2>
+        <div style="font-size:14px;color:#7a6658">${st.size} ${st.drink} · ₱${price()}</div>
+        <label for="nm">Name for the cup</label><input id="nm" autocomplete="name">
+        <label for="ph">Mobile number</label><input id="ph" inputmode="tel" ${FIXED ? 'aria-describedby="phe"' : ''}>
+        ${FIXED ? '<div class="err" id="phe" role="alert"></div>' : ''}
+        ${FIXED ? `<button class="place" id="go">Place order · ₱${price()}</button>` : `<div class="place" id="go">Place order</div>`}</div>`;
+    document.getElementById('go').onclick = () => {
+      const ph = document.getElementById('ph'), nm = document.getElementById('nm');
+      const ok = /^09\d{9}$/.test(ph.value.replace(/\s/g, ''));
+      ph.classList.toggle('bad', !ok);
+      if (FIXED) document.getElementById('phe').textContent = ok ? '' : 'Enter an 11-digit mobile number starting with 09, e.g. 0917 123 4567.';
+      if (!ok || !nm.value.trim()) return;
+      st.step = 3; render();
+    };
+  } else {
+    app.innerHTML = `<div class="card done"><h2>Order placed</h2><p>${st.size} ${st.drink} for ${document.title && ''}pickup. We'll call your name.</p></div>`;
+    document.title = 'Kapé — order placed';
+  }
+}
+render();
+</script>
+</body>
+</html>
