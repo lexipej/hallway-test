@@ -65,15 +65,21 @@ table.matrix{border-collapse:collapse;width:100%;background:var(--card);border:1
 h2{font:800 13px var(--mono);letter-spacing:.12em;text-transform:uppercase;margin:46px 0 14px;display:flex;align-items:center;gap:10px}
 h2:after{content:"";flex:1;height:1.5px;background:var(--ink)}
 .cols{display:grid;grid-template-columns:1fr 300px;gap:28px;align-items:start}
-.find{display:grid;grid-template-columns:64px 1fr;background:var(--card);border:1px solid var(--rule);border-left:4px solid var(--ink3);margin-bottom:10px}
-.find.blocker{border-left-color:var(--fail)} .find.major{border-left-color:var(--warn)}
-.find .id{padding:14px 0 0 14px;font:700 12px var(--mono);color:var(--ink3)}
-.find .body{padding:12px 16px 14px 0} .find h3{margin:0 0 6px;font:750 17px/1.3 var(--sans);letter-spacing:-.01em}
-.sev{font:700 10.5px var(--mono);letter-spacing:.08em;text-transform:uppercase;margin-right:8px;vertical-align:2px}
+.find{background:var(--card);border:1px solid var(--rule);border-top:4px solid var(--ink3);margin-bottom:14px}
+.find.blocker{border-top-color:var(--fail)} .find.major{border-top-color:var(--warn)}
+.fh{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;padding:12px 16px;border-bottom:1px solid var(--rule)}
+.fh .id{font:700 12px var(--mono);color:var(--ink3)} .fh h3{margin:0;font:750 17px/1.25 var(--sans);letter-spacing:-.01em;flex:1 1 260px}
+.sev{font:700 10.5px var(--mono);letter-spacing:.08em;text-transform:uppercase;padding:3px 6px;border:1.5px solid currentColor}
 .blocker .sev{color:var(--fail)} .major .sev{color:var(--warn)} .minor .sev{color:var(--ink3)}
-.tags{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 8px} .tags span{font:600 11px var(--mono);border:1px solid var(--rule);padding:3px 6px}
-.ev{color:var(--ink2);font-size:14px} .fix{font-size:14px;margin-top:8px;padding-left:10px;border-left:2px solid var(--blue)}
-.fix b{font:700 11px var(--mono);letter-spacing:.08em;color:var(--blue);margin-right:6px}
+.tags{display:flex;flex-wrap:wrap;gap:6px} .tags span{font:600 11px var(--mono);background:var(--paper);border:1px solid var(--rule);padding:3px 6px}
+.fb{display:grid;grid-template-columns:1fr 1fr;align-items:stretch}
+.prob{padding:12px 16px 14px} .prob .what{margin:0 0 10px;font-size:14.5px;font-weight:600}
+.prob ul,.fixbox ol{margin:6px 0 0;padding-left:18px;font-size:13.5px;color:var(--ink2)} .prob li,.fixbox li{margin:3px 0}
+.fixbox{background:var(--blue-soft);border-left:3px solid var(--blue);padding:12px 16px 14px}
+.fixbox .label{color:var(--blue);font-weight:800} .fixbox ol{color:var(--ink)}
+.glance{background:var(--card);border:1.5px solid var(--ink);padding:14px 18px;margin-top:22px}
+.glance ul{margin:8px 0 0;padding-left:18px;font-size:15.5px;font-weight:600} .glance li{margin:4px 0}
+@media (max-width:760px){.fb{grid-template-columns:1fr}}
 .heat{position:relative;border:1.5px solid var(--ink);background:var(--card)} .heat .im{width:100%;aspect-ratio:420/860;background-size:cover;background-position:top}
 .heat .im.desk{aspect-ratio:1280/800}
 .heat i{position:absolute;width:22px;height:22px;margin:-11px 0 0 -11px;border-radius:50%;background:var(--blue);color:#fff;
@@ -239,6 +245,10 @@ def _nums(res: dict) -> str:
     return f'<div class="sb"><div class="nums">{"".join(out)}</div>{_friction(res)}</div>'
 
 
+def _as_list(v) -> list:
+    return [x for x in (v if isinstance(v, list) else [v] if v else []) if str(x).strip()]
+
+
 def _findings(res: dict) -> str:
     if not res["findings"]:
         return '<p class="note">No barriers found for these people on this task.</p>'
@@ -246,10 +256,22 @@ def _findings(res: dict) -> str:
     for n, f in enumerate(res["findings"], 1):
         sev = f.get("severity") if f.get("severity") in SEV else "major"
         tags = "".join(f"<span>{_esc(w)}</span>" for w in f.get("who", []))
-        out.append(f'<div class="find {sev}"><div class="id">F-{n:02d}</div><div class="body"><h3><span class="sev">{SEV[sev]}</span>'
-                   f'{_esc(f["title"])}</h3>' + (f'<div class="tags">{tags}</div>' if tags else "")
-                   + f'<div class="ev">{_esc(f.get("evidence"))}</div><div class="fix"><b>FIX</b>{_esc(f.get("fix"))}</div></div></div>')
+        ev = "".join(f"<li>{_esc(e)}</li>" for e in _as_list(f.get("evidence")))
+        fixes = "".join(f"<li>{_esc(x)}</li>" for x in _as_list(f.get("fix")))
+        what = f'<p class="what">{_esc(f["what"])}</p>' if f.get("what") else ""
+        out.append(f'<div class="find {sev}"><div class="fh"><span class="id">F-{n:02d}</span><span class="sev">{SEV[sev]}</span>'
+                   f'<h3>{_esc(f["title"])}</h3><div class="tags">{tags}</div></div>'
+                   f'<div class="fb"><div class="prob">{what}' + (f'<div class="label">What happened</div><ul>{ev}</ul>' if ev else "")
+                   + f'</div><div class="fixbox"><div class="label">Fix</div><ol>{fixes}</ol></div></div></div>')
     return "".join(out)
+
+
+def _glance(res: dict) -> str:
+    items = res.get("summary") or []
+    if not items:
+        return ""
+    return ('<div class="glance"><div class="label">At a glance</div><ul>'
+            + "".join(f"<li>{_esc(s)}</li>" for s in items) + "</ul></div>")
 
 
 def build_html(res: dict, personas: dict, shots: Path, viewport=(420, 860)) -> str:
@@ -278,7 +300,7 @@ def build_html(res: dict, personas: dict, shots: Path, viewport=(420, 860)) -> s
 <h1>{_esc(res.get('title') or host)}</h1>
 <div class="task"><div class="label">Task</div><p>{_esc(res['task'])}</p></div>
 <div class="meta">{_esc(res['url'])} · {len(res['personas_order'])} people · real browsers · limits enforced in code</div>
-<div class="score">{_nums(res)}{_matrix(res, people, av)}</div>
+<div class="score">{_nums(res)}{_matrix(res, people, av)}</div>{_glance(res)}
 <div class="cols"><div><h2>What got in the way</h2>{_findings(res)}</div>{heat}</div>
 <h2>Sessions</h2><div class="grid2 {'two' if len(cols) > 1 else ''}">{''.join(cols)}</div>
 <div class="foot">Generated by Hallway Test for Hermes Agent. Perception (text size, contrast, colour vision, screen-reader

@@ -36,10 +36,14 @@ def test_parse_reply_variants():
 
 
 def test_parse_findings_limits_and_shapes():
-    raw = json.dumps({"findings": [{"title": "A", "severity": "BLOCKER", "who": "Jo", "evidence": "e", "fix": "f"}] * 9})
-    got = parse_findings(raw)
+    raw = json.dumps({"summary": ["Two of five finished.", "Seats are colour-only."],
+                      "findings": [{"title": "A", "severity": "BLOCKER", "who": "Jo", "what": "word " * 60,
+                                    "evidence": "one quote", "fix": ["step one", "step two", "three", "four"]}] * 9})
+    got, summary = parse_findings(raw)
     assert len(got) == 6 and got[0]["severity"] == "blocker" and got[0]["who"] == ["Jo"]
-    assert parse_findings("not json") == []
+    assert got[0]["evidence"] == ["one quote"] and len(got[0]["fix"]) == 3 and got[0]["what"].endswith("…")
+    assert summary == ["Two of five finished.", "Seats are colour-only."]
+    assert parse_findings("not json") == ([], [])
 
 
 def test_pick_personas():
@@ -388,8 +392,10 @@ def test_fallback_findings_follow_the_run():
     results = [dict(base, persona="keyboard", status="success", n_steps=8,
                     audit={"x": [{"kind": "not_keyboard", "text": "×", "detail": "d"}]}),
                dict(base, persona="shaky", status="gave_up", quote="I can't hit it", audit={})]
-    got, src = findings("t", results, P, None)
-    assert src == "checks"
+    summary = []
+    got, src = findings("t", results, P, None, None, summary)
+    assert src == "checks" and summary and "finished" in summary[0]
+    assert all(isinstance(f["fix"], list) and isinstance(f["evidence"], list) for f in got)
     assert got[0]["severity"] == "blocker" and "Nina" in got[0]["title"]
     mouse_only = next(f for f in got if f["title"].startswith("Controls"))
     assert mouse_only["severity"] != "blocker"           # Jo finished, so it can't be a blocker

@@ -95,31 +95,48 @@ WHAT HAPPENED (per person: outcome, steps, and their own words):
 AUTOMATED CHECKS FOUND ON SCREENS THEY SAW:
 {audit}
 
-Write the 3 to 5 most important findings, most severe first. Each finding must name who it blocked or slowed,
-point to concrete evidence above, and give one specific fix a developer can apply.
+Write a short summary and the 3 to 5 most important findings, most severe first. Be brief: people skim this.
+Each finding must name who it blocked or slowed, point to concrete evidence above, and give specific fixes.
 Severity must match what happened in THIS run: "blocker" only if it actually stopped someone from finishing;
 "major" if it clearly slowed or confused someone; an automated check that no one ran into is at most "minor".
 Never call something a blocker for a person who finished. Prefer fewer, well-evidenced findings over a long list.
 Only state facts about the page that appear above (the people's words, their steps, or the automated checks).
 Do not guess at the page's markup (labels, placeholders, ARIA) beyond what the checks report.
-Reply with ONLY JSON: {{"findings": [{{"title": "...", "severity": "blocker|major|minor", "who": ["persona name", ...],
-"evidence": "...", "fix": "..."}}]}}"""
+
+Reply with ONLY JSON in this shape (respect the word limits):
+{{"summary": ["2-3 bullets, max 14 words each: the story of this run"],
+ "findings": [{{"title": "max 8 words", "severity": "blocker|major|minor", "who": ["first name", ...],
+   "what": "one sentence, max 20 words",
+   "evidence": ["1-3 bullets, max 14 words each; a short quote from a person is good"],
+   "fix": ["1-3 concrete steps, max 16 words each"]}}]}}"""
 
 
-def parse_findings(raw: str) -> list[dict]:
+def _short(s, n: int) -> str:
+    s = " ".join(str(s or "").split())
+    return s if len(s) <= n else s[: n - 1].rsplit(" ", 1)[0].rstrip(",;:") + "…"
+
+
+def _list(v, n_items: int, n_chars: int) -> list:
+    items = v if isinstance(v, list) else [v] if v else []
+    return [_short(x, n_chars) for x in items if str(x or "").strip()][:n_items]
+
+
+def parse_findings(raw: str) -> tuple[list[dict], list[str]]:
+    """(findings, summary bullets) from the model's JSON; tolerant of fences and older shapes."""
     text = re.sub(r"^```(?:json)?|```$", "", (raw or "").strip(), flags=re.M)
     start, end = text.find("{"), text.rfind("}")
     if start < 0 or end < 0:
-        return []
+        return [], []
     try:
         obj = json.loads(text[start:end + 1])
     except json.JSONDecodeError:
-        return []
+        return [], []
     out = []
     for f in obj.get("findings", [])[:6]:
         if isinstance(f, dict) and f.get("title"):
             who = f.get("who") or []
-            out.append({"title": str(f["title"])[:120], "severity": str(f.get("severity", "major")).lower(),
+            out.append({"title": _short(f["title"], 80), "severity": str(f.get("severity", "major")).lower(),
                         "who": [str(w) for w in (who if isinstance(who, list) else [who])][:5],
-                        "evidence": str(f.get("evidence", ""))[:300], "fix": str(f.get("fix", ""))[:300]})
-    return out
+                        "what": _short(f.get("what", ""), 160),
+                        "evidence": _list(f.get("evidence"), 3, 140), "fix": _list(f.get("fix"), 3, 150)})
+    return out, _list(obj.get("summary"), 3, 120)

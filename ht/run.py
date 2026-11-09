@@ -257,7 +257,10 @@ def run_persona(url: str, p: Persona, variant: str, task: str, complete: Complet
     reason = reason.strip(" <>\"'")
     if status == "gave_up" and reason.lower() in ("", "gave up", "give up", "i give up"):
         reason = thoughts[-1] if thoughts else "gave up"
-    quote = reason if status == "gave_up" else next((t for t in thoughts if HESITANT.search(t)), thoughts[-1] if thoughts else "")
+    after_dead = [steps[k + 1]["thought"] for k in range(len(steps) - 1)
+                  if steps[k].get("changed") is False and steps[k].get("kind") == "click" and steps[k + 1].get("thought")]
+    quote = reason if status == "gave_up" else next((t for t in thoughts if HESITANT.search(t)),
+                                                     after_dead[0] if after_dead else (thoughts[-1] if thoughts else ""))
     quote = quote.strip(" <>\"'")
     clicks = [s["click"] for s in steps if s.get("click") and s.get("screen") == start_fp]
     out = {"persona": p.id, "variant": variant, "status": status, "reason": reason, "steps": steps,
@@ -279,7 +282,9 @@ def summarise(o: dict) -> str:
 
 
 def findings(task: str, results: list[dict], personas: dict, complete: Optional[Complete],
-             issues_note: Optional[list] = None) -> tuple[list[dict], str]:
+             issues_note: Optional[list] = None, summary_out: Optional[list] = None) -> tuple[list[dict], str]:
+    """Findings (title, severity, who, what, evidence[], fix[]) and, via summary_out, 2-3 headline bullets."""
+    summary_out = summary_out if summary_out is not None else []
     issues_note = issues_note if issues_note is not None else []
     issues: dict[tuple, dict] = {}
     for r in results:
@@ -301,8 +306,9 @@ def findings(task: str, results: list[dict], personas: dict, complete: Optional[
             if not (raw or "").strip():  # reasoning models can spend the whole budget thinking: ask again, briefly
                 raw = complete([sysmsg, {"role": "user", "content": prompt[:6000] + "\n\nAnswer straight away with "
                                  "the JSON; keep any reasoning very short."}])
-            got = parse_findings(raw)
+            got, summary = parse_findings(raw)
             if got:
+                summary_out.extend(summary or headline(results, personas))
                 return got, "model"
             note = f"model reply had no findings: {str(raw)[:200]!r}"
         except Exception as exc:  # noqa: BLE001 - recorded, then the deterministic checks are used
@@ -325,22 +331,43 @@ def findings(task: str, results: list[dict], personas: dict, complete: Optional[
             sev = "major" if FIX_HINTS[k][1] != "minor" else "minor"
         else:
             sev = "minor"
-        out.append({"title": FIX_HINTS[k][0], "severity": sev, "who": [personas[p].name.split(",")[0] for p in who],
-                    "evidence": ", ".join(f"'{t}'" for t in by_kind[k][:4]) + ("" if sev != "minor" or not who else
-                                "; nobody was held up by it in this run"), "fix": FIX_HINTS[k][2]})
+        examples = ", ".join(f"'{t}'" for t in by_kind[k][:3])
+        out.append({"title": FIX_HINTS[k][0], "severity": sev, "who": [personas[p].first_name for p in who],
+                    "what": f"Automated check, found on {len(by_kind[k])} element{'s' if len(by_kind[k]) != 1 else ''}.",
+                    "evidence": [f"For example {examples}"] + (["Nobody was held up by it in this run"] if sev == "minor" and who else []),
+                    "fix": [FIX_HINTS[k][2]]})
     # What people actually ran into comes first: give-ups and taps that did nothing.
     for r in results:
-        p = personas[r["persona"]].name.split(",")[0]
+        p = personas[r["persona"]].first_name
         if r["status"] in ("gave_up", "false_done", "out_of_steps"):
             out.append({"title": f"{p} could not finish", "severity": "blocker", "who": [p],
-                        "evidence": f"In their words: “{r['quote']}”", "fix": "Watch the replay to see where they got stuck."})
+                        "what": f"{p} stopped after {r['n_steps']} steps.", "evidence": [f"“{r['quote']}”"],
+                        "fix": ["Open the replay to see the screen where they got stuck."]})
         elif r["dead_clicks"] >= 2:
             out.append({"title": f"Taps that did nothing for {p}", "severity": "major", "who": [p],
-                        "evidence": f"{r['dead_clicks']} taps changed nothing on screen", "fix":
-                        "Make tap targets larger and give every tap visible feedback."})
+                        "what": f"{r['dead_clicks']} of {p}'s taps changed nothing on screen.",
+                        "evidence": [f"{r['dead_clicks']} dead taps in {r['n_steps']} steps"],
+                        "fix": ["Make tap targets larger", "Give every tap visible feedback"]})
     rank = {"blocker": 0, "major": 1, "minor": 2}
     out.sort(key=lambda f: rank.get(f["severity"], 2))
+    summary_out.extend(headline(results, personas))
     return out[:5], "checks"
+
+
+def headline(results: list[dict], personas: dict) -> list[str]:
+    """2-3 plain bullets that tell the story of the run, without the model."""
+    out = []
+    variants = [v for v in ("before", "after") if any(r["variant"] == v for r in results)]
+    for v in variants:
+        rs = [r for r in results if r["variant"] == v]
+        ok = sum(r["status"] == "success" for r in rs)
+        stuck = [personas[r["persona"]].first_name for r in rs if r["status"] != "success"]
+        label = "" if len(variants) == 1 else (" before the fix" if v == "before" else " after the fix")
+        out.append(f"{ok} of {len(rs)} people finished{label}" + (f"; {', '.join(stuck)} did not." if stuck else "."))
+    dead = sum(r["dead_clicks"] for r in results if r["variant"] == "before")
+    if dead:
+        out.append(f"{dead} taps did nothing{' before the fix' if len(variants) > 1 else ''}.")
+    return out[:3]
 
 
 def run_test(url: str, task: str, complete: Complete, personas: list[Persona], data_dir: Path,
@@ -386,11 +413,12 @@ def run_test(url: str, task: str, complete: Complete, personas: list[Persona], d
         state.set(status="writing report")
         pmap = {p.id: p for p in personas}
         notes: list = []
+        summary: list = []
         found, source = findings(task, [r for r in results if r["status"] != "error"], pmap,
-                                 findings_complete or complete, notes)
+                                 findings_complete or complete, notes, summary)
         score = {v: {"passed": sum(r["status"] == "success" for r in results if r["variant"] == v),
                      "total": sum(1 for r in results if r["variant"] == v)} for v, _ in variants}
-        result = {**meta, "results": results, "findings": found, "findings_source": source,
+        result = {**meta, "results": results, "findings": found, "findings_source": source, "summary": summary,
                   "findings_note": notes[0] if notes else "", "score": score,
                   "finished": time.time()}
         for r in results:
