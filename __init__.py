@@ -92,7 +92,19 @@ def run_tool(ctx, args: dict) -> dict:
                     time_budget=float(ctx.get_config("time_budget_seconds", 330)))
 
 
+MODEL_HINT = ("Hallway Test uses Hermes's default model (the one `hermes model` saves), not the model picked in a "
+              "single chat. Check that model works, then run the test again.")
+
+
+def check_model_errors(res: dict) -> None:
+    """Every person failing on the model call is a setup problem, not a usability result: say so plainly."""
+    errs = [r for r in res["results"] if r["status"] == "error"]
+    if res["results"] and len(errs) == len(res["results"]):
+        raise RuntimeError(f"No one could start: {errs[0]['reason'][:300]} {MODEL_HINT}")
+
+
 def tool_summary(res: dict) -> dict:
+    check_model_errors(res)
     lines = []
     for v in res["variants"]:
         sc = res["score"][v]
@@ -135,8 +147,10 @@ def register(ctx) -> None:
                 out.append(f"{r['id']}  {sc}  {r.get('title') or r['url']}  ({p.parent / 'report.html'})")
             return "\n".join(out)
         if arg == "demo":
-            res = run_tool(ctx, {"url": "demo", "compare_url": "demo:fixed"})
-            s = tool_summary(res)
+            try:
+                s = tool_summary(run_tool(ctx, {"url": "demo", "compare_url": "demo:fixed"}))
+            except Exception as exc:  # noqa: BLE001 - shown to the user as the command's reply
+                return f"Hallway Test could not run: {exc}"
             return f"{s['score']}\nReport: {s['report_html']}\nCard: {s['summary_card']}"
         return "Unknown option. Use /hallway, /hallway demo or /hallway runs."
 

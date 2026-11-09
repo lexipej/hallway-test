@@ -248,3 +248,17 @@ def test_backend_routes(tmp_path, monkeypatch):
     assert c.get("/runs/..%2F..%2Fetc").status_code == 404
     (d / "report.html").write_text("<p>hi</p>")
     assert c.get(f"/runs/{d.name}/report").json()["src"].startswith("data:text/html")
+
+
+def test_all_model_errors_are_reported_not_scored(tmp_path, monkeypatch):
+    pytest.importorskip("playwright.sync_api")
+    mod = _load_plugin()
+    monkeypatch.setattr(mod, "_data_dir", lambda: tmp_path)
+
+    def broken(messages):
+        raise RuntimeError("Error code: 429 - usage_limit_reached")
+    ctx = FakeCtx(broken)
+    mod.register(ctx)
+    out = json.loads(ctx.tools["hallway_test"][1]({"url": "demo", "personas": ["first_timer"], "max_steps": 4}))
+    assert not out["ok"] and "429" in out["error"] and "hermes model" in out["error"]
+    assert "could not run" in ctx.commands["hallway"]("demo")

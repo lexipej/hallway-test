@@ -59,7 +59,8 @@ Ask Hermes in plain words, or call the `hallway_test` tool:
 
 ## Requirements and settings
 
-- Hermes 0.23 or newer. Persona decisions use **your active model** through Hermes (`ctx.llm`); no API keys.
+- Hermes 0.23 or newer. Persona decisions use **Hermes's default model** through `ctx.llm` (set it with `hermes model`;
+  the model picked inside one chat does not apply); no extra API keys. A fast, cheap model works well.
 - Python dependency: `playwright` (installed with the plugin). For the browser it uses Playwright's Chromium if
   present, otherwise the Microsoft Edge or Google Chrome already on your machine. It never downloads a browser
   itself; to use Playwright's Chromium, run `python -m playwright install chromium` in the Hermes environment.
