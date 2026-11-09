@@ -9,7 +9,7 @@ from pathlib import Path
 DEMO_DIR = Path(__file__).resolve().parent.parent / "demo" / "pier9"
 DEMO_TITLE = "Pier 9 Live seat picker (demo)"
 DEMO_TASK = ("Buy two tickets for Friday's Moonlit Static show: two seats next to each other in row C.")
-DEMO_SUCCESS = "You're going"
+DEMO_SUCCESS = "Row C · Seats"   # the confirmation names the row, so the wrong row is a false finish
 _servers: dict[str, ThreadingHTTPServer] = {}
 _lock = threading.Lock()
 

@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import logging
 import threading
+import time
 from pathlib import Path
 
 from .ht import demo
@@ -78,7 +79,9 @@ _aux = {"registered": False}
 def _make_complete(ctx, max_tokens: int, timeout: float = 90):
     def complete(messages: list[dict]) -> str:
         last = None
-        for _ in range(2):  # one retry for a transient provider error
+        for attempt in range(4):  # ride out dropped connections and rate limits: 0, 2, 5, 10 s
+            if attempt:
+                time.sleep((2, 5, 10)[attempt - 1])
             try:
                 kw = dict(temperature=0.4, max_tokens=max_tokens, timeout=timeout, purpose="hallway-test persona step")
                 if _aux["registered"]:
@@ -109,7 +112,7 @@ def run_tool(ctx, args: dict) -> dict:
     success = (args.get("success_text") or "").strip() or (demo.DEMO_SUCCESS if is_demo else "")
     viewport = (1280, 800) if args.get("device") == "desktop" else (420, 860)
     max_steps = int(args.get("max_steps") or ctx.get_config("max_steps", 16))
-    title = args.get("title") or (demo.DEMO_TITLE if is_demo else "")
+    title = demo.DEMO_TITLE if is_demo else (args.get("title") or "")
     try:
         return _run(ctx, args, url, is_demo, compare, task, success, viewport, max_steps, title)
     except RuntimeError as exc:
@@ -120,7 +123,7 @@ def run_tool(ctx, args: dict) -> dict:
 
 def _run(ctx, args, url, is_demo, compare, task, success, viewport, max_steps, title) -> dict:
     from .ht.run import run_test
-    return run_test(url, task, _make_complete(ctx, 700), pick(args.get("personas"), args.get("custom_personas")), _data_dir(),
+    return run_test(url, task, _make_complete(ctx, 1200), pick(args.get("personas"), args.get("custom_personas")), _data_dir(),
                     success_text=success, compare_url=compare, facts=args.get("facts", ""), max_steps=max_steps,
                     parallel=max(1, min(int(ctx.get_config("parallel", 3)), 6)), viewport=viewport, title=title,
                     findings_complete=_make_complete(ctx, 8000, timeout=180),

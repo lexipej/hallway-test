@@ -437,9 +437,9 @@ def test_demo_barriers_differ_per_person(pw):
     seen = {pid: B.observe(pg, PERSONAS[pid])["text"] for pid in PERSONAS}
     assert "coloured green" in seen["first_timer"] and "coloured red" in seen["first_timer"]
     assert "coloured green" not in seen["colourblind"] and "coloured brownish" in seen["colourblind"]
-    assert "Row C" not in seen["keyboard"] and 'button "Buy tickets"' in seen["keyboard"]   # seats are not controls
+    assert "Row C," not in seen["keyboard"] and 'button "Buy tickets"' in seen["keyboard"]   # seats are not controls
     assert seen["low_vision"].count("[text too small or faint to read]") >= 8               # row letters, legend
-    assert "unlabelled square, 14x14px" in seen["shaky"]
+    assert "unlabelled square, 12x12px" in seen["shaky"]
     pg.close()
 
 
@@ -454,7 +454,7 @@ def test_fixed_demo_works_for_everyone(pw):
     for k in ["ArrowDown", "ArrowDown", "ArrowRight", "ArrowRight", "ArrowRight", "ArrowRight", "Enter",
               "ArrowRight", "Enter", "Tab", "Enter"]:
         pg.keyboard.press(k)
-    assert "You're going" in pg.inner_text("body")
+    assert "Row C · Seats 7 & 8" in pg.inner_text("body")
     pg.close()
 
 
@@ -465,3 +465,12 @@ def test_custom_personas_combine_enforced_traits():
     assert not p.mouse and p.min_font_px == 13.5 and p.first_name == "Priya" and p.condition == "Low vision + Keyboard only"
     with pytest.raises(ValueError):
         pick(None, [{"name": "X", "traits": ["telepathy"]}])
+
+
+def test_unreadable_reply_is_retried_on_the_same_screen(tmp_path):
+    from ht.run import run_test
+    replies = iter(["", '{"action": "give_up nothing works", "thought": "I give up"}'])
+    res = run_test(KAPE, "x", lambda m: next(replies), pick(["first_timer"]), tmp_path, success_text="Order placed",
+                   max_steps=4)
+    r = res["results"][0]
+    assert r["status"] == "gave_up" and r["n_steps"] == 1

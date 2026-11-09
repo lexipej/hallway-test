@@ -194,6 +194,8 @@ def run_persona(url: str, p: Persona, variant: str, task: str, complete: Complet
                 state.update(key, status="thinking", step=i + 1, shot=shot)
                 try:
                     d = brain.decide(obs["text"], i, max_steps)
+                    if not d.get("action"):  # an unreadable reply is usually a hiccup: ask once more, same screen
+                        d = brain.decide(obs["text"], i, max_steps)
                 except Exception as exc:
                     status, reason = "error", f"model call failed: {exc}"
                     break

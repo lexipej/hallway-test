@@ -55,6 +55,7 @@ h1{font:800 44px/1.02 var(--sans);letter-spacing:-.035em;margin:0 0 16px;max-wid
 .nums{display:flex;align-items:flex-end;gap:16px}
 .num .n{font:800 92px/.9 var(--sans);letter-spacing:-.05em} .num .n small{font-size:40px;color:var(--ink3);letter-spacing:-.02em}
 .num .label{margin-top:10px} .arrow{font:300 52px/1 var(--sans);color:var(--ink3);padding-bottom:22px}
+.fr{display:flex;gap:18px;margin-top:16px;font:12px var(--mono);color:var(--ink2)} .fr b{color:var(--ink)}
 table.matrix{border-collapse:collapse;width:100%;background:var(--card);border:1.5px solid var(--ink)}
 .matrix th{text-align:left;padding:9px 12px;border-bottom:1.5px solid var(--ink)}
 .matrix td{padding:8px 12px;border-bottom:1px solid var(--rule);vertical-align:middle}
@@ -214,6 +215,18 @@ def _matrix(res: dict, people: dict, av: dict) -> str:
             f'{"".join(rows)}</table>')
 
 
+def _friction(res: dict) -> str:
+    """Dead taps and steps, before -> after: the improvement when the pass count alone doesn't show it."""
+    if len(res["variants"]) < 2:
+        return ""
+    tot = {v: (sum(r["dead_clicks"] for r in res["results"] if r["variant"] == v),
+               sum(r["n_steps"] for r in res["results"] if r["variant"] == v)) for v in res["variants"]}
+    (d0, s0), (d1, s1) = tot["before"], tot["after"]
+    if d0 == d1 and s0 == s1:
+        return ""
+    return (f'<div class="fr"><span>Dead taps <b>{d0} → {d1}</b></span><span>Total steps <b>{s0} → {s1}</b></span></div>')
+
+
 def _nums(res: dict) -> str:
     out = []
     for i, v in enumerate(res["variants"]):
@@ -223,7 +236,7 @@ def _nums(res: dict) -> str:
             out.append('<div class="arrow">→</div>')
         out.append(f'<div class="num"><div class="n">{sc["passed"]}<small>/{sc["total"]}</small></div>'
                    f'<div class="label">{label}</div></div>')
-    return f'<div class="nums">{"".join(out)}</div>'
+    return f'<div class="sb"><div class="nums">{"".join(out)}</div>{_friction(res)}</div>'
 
 
 def _findings(res: dict) -> str:
@@ -283,9 +296,10 @@ body{margin:0;width:1200px;height:675px;overflow:hidden;background:var(--paper);
 .brand{font:800 14px var(--mono);letter-spacing:.14em} .brand b{color:var(--blue)}
 h1{font:800 40px/1.02 var(--sans);letter-spacing:-.035em;margin:22px 0 14px}
 .task{font:13.5px/1.5 var(--mono);color:var(--ink2);border-left:3px solid var(--blue);padding-left:12px}
-.nums{display:flex;align-items:flex-end;gap:16px;margin-top:auto}
+.l .sb{margin-top:auto} .nums{display:flex;align-items:flex-end;gap:16px}
 .num .n{font:800 110px/.88 var(--sans);letter-spacing:-.055em} .num .n small{font-size:46px;color:var(--ink3)}
 .num .label{margin-top:10px} .arrow{font:300 56px/1 var(--sans);color:var(--ink3);padding-bottom:26px}
+.fr{display:flex;gap:18px;margin-top:14px;font:13px var(--mono);color:var(--ink2)} .fr b{color:var(--ink)}
 .r{padding:34px 40px 30px 34px;display:flex;flex-direction:column;justify-content:center;gap:10px}
 .p{display:grid;grid-template-columns:56px 1fr auto;gap:14px;align-items:center;background:var(--card);border:1px solid var(--rule);padding:10px 12px 10px 10px}
 .p .nm{font:800 17px/1.1 var(--sans);letter-spacing:-.02em;margin-bottom:6px}
