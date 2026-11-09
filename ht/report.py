@@ -67,7 +67,8 @@ h1{font:800 64px/.95 var(--head);letter-spacing:-.01em;text-transform:uppercase;
 .glance{margin:0;padding:0;list-style:none;font-size:17px;line-height:1.45}
 .glance li{padding:7px 0 7px 22px;position:relative} .glance li:before{content:"";position:absolute;left:0;top:15px;width:10px;height:10px;background:var(--pink)}
 h2{display:flex;align-items:center;gap:14px;font:800 28px/1 var(--head);text-transform:uppercase;color:var(--blue);margin:70px 0 18px}
-h2:after{content:"";flex:1;height:10px;background-image:radial-gradient(var(--blue) 28%,transparent 31%);background-size:7px 7px;opacity:.55}
+h2:after{content:"";flex:1;border-top:3px dotted var(--blue);opacity:.45}
+h2+.find{border-top:0}
 table.res{border-collapse:collapse;width:100%}
 .res th{text-align:left;font:700 11px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--ink3);padding:0 0 10px}
 .res td{padding:14px 16px 14px 0;border-top:1.5px dashed var(--rule);vertical-align:middle}
@@ -76,6 +77,7 @@ table.res{border-collapse:collapse;width:100%}
 .find{display:grid;grid-template-columns:70px 1fr;padding:26px 0;border-top:1.5px dashed var(--rule);max-width:820px}
 .fnum{font:800 46px/.9 var(--head);color:var(--blue);text-shadow:3px 2px 0 rgba(255,79,154,.8)}
 .fmeta{display:flex;align-items:center;gap:10px;font:700 11.5px var(--mono);text-transform:uppercase;letter-spacing:.04em;color:var(--ink3)}
+.whoi{display:inline-flex;align-items:center;gap:4px;color:var(--blue)} .whoi+.whoi{margin-left:6px}
 .mark{padding:3px 7px 2px;color:var(--navy)} .blocker .mark{background:var(--pink);color:#fff} .major .mark{background:var(--yellow)}
 .minor .mark{border:1.5px solid var(--ink3);color:var(--ink2)}
 .find h3{margin:10px 0 6px;font:800 26px/1.05 var(--head);text-transform:uppercase;color:var(--navy)}
@@ -92,11 +94,16 @@ table.res{border-collapse:collapse;width:100%}
 .quote{position:relative;margin:16px 0 0;padding-left:26px;font:500 16px/1.45 var(--sans)}
 .quote:before{content:"“";position:absolute;left:0;top:-14px;font:800 48px/1 var(--head);color:var(--pink)}
 .sum{margin-top:8px;font:11.5px var(--mono);color:var(--ink3)}
-.film{display:flex;gap:6px;margin-top:14px}
-.film .im{width:52px;height:106px;background-size:cover;background-position:top;border:1.5px solid var(--navy)}
-.film{flex-wrap:wrap} .film .im.desk{width:96px;height:60px}
+.film{margin-top:14px}
+.film{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.film .im{aspect-ratio:420/860;background-size:cover;background-position:top;border:1.5px solid var(--navy)}
+.film .im.desk{aspect-ratio:1280/800} [data-zoom]{cursor:zoom-in}
+#lb{position:fixed;inset:0;z-index:9;background:rgba(14,16,40,.95);display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:14px;padding:28px;cursor:zoom-out} #lb[hidden]{display:none}
+#lb .pic{width:min(92vw,1100px);height:calc(100vh - 140px);background-size:contain;background-repeat:no-repeat;background-position:center}
+#lb .cap{max-width:760px;color:#fff;font:15px/1.45 var(--sans);text-align:center} #lb .x{font:700 11px var(--mono);color:#c9ccff;letter-spacing:.06em}
 details{margin-top:12px} summary{cursor:pointer;font:700 12px var(--mono);letter-spacing:.04em;text-transform:uppercase;color:var(--blue)}
-.steps{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:12px;margin-top:12px}
+.steps{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:14px;margin-top:12px}
 .st2{font-size:12.5px;color:var(--ink2)} .st2 .im{width:100%;aspect-ratio:420/860;background-size:cover;background-position:top;border:1.5px solid var(--navy);position:relative}
 .st2 .im.desk{aspect-ratio:1280/800}
 .st2 .tap{position:absolute;width:18px;height:18px;margin:-9px 0 0 -9px;border:2.5px solid var(--pink);border-radius:50%;background:rgba(255,79,154,.2)}
@@ -202,9 +209,12 @@ def _subject(r: dict, person: dict, img: Images, desk: bool, vw: int, vh: int, a
     steps = [s for s in r["steps"] if s.get("shot")]
     picks = steps[:: max(1, len(steps) // 4)][:4] if steps else []
     shape = "im desk" if desk else "im"
-    film = "".join(f'<div class="{shape} {img(s["shot"])}"></div>' for s in picks)
+    picks = (steps[:: max(1, len(steps) // 2)][:2] if steps else [])
+    def cap(s):
+        return _esc(f'{s["i"] + 1}. {s["action"]}' + (f' — {s["thought"]}' if s.get("thought") else ""))
+    film = "".join(f'<div class="{shape} {img(s["shot"])}" data-zoom data-cap="{cap(s)}"></div>' for s in picks)
     if r.get("final_shot"):
-        film += f'<div class="{shape} {img(r["final_shot"])}"></div>'
+        film += f'<div class="{shape} {img(r["final_shot"])}" data-zoom data-cap="Where they ended up"></div>'
     rows = []
     for s in r["steps"]:
         tap = ""
@@ -213,7 +223,8 @@ def _subject(r: dict, person: dict, img: Images, desk: bool, vw: int, vh: int, a
             tap = f'<span class="tap" style="left:{x / vw * 100:.1f}%;top:{y / vh * 100:.1f}%"></span>'
         dead = '<div class="dead">nothing happened</div>' if s.get("kind") == "click" and s.get("changed") is False else ""
         err = f'<div class="dead">{_esc(s["error"][:90])}</div>' if s.get("error") else ""
-        rows.append(f'<div class="st2"><div class="im {"desk " if desk else ""}{img(s.get("shot"))}">{tap}</div>'
+        rows.append(f'<div class="st2"><div class="im {"desk " if desk else ""}{img(s.get("shot"))}" data-zoom '
+                    f'data-cap="{_esc(str(s["i"] + 1) + ". " + s["action"] + (" — " + s["thought"] if s.get("thought") else ""))}">{tap}</div>'
                     f'<div class="act">{s["i"] + 1}. {_esc(s["action"])}</div>'
                     + (f'<div class="th">{_esc(s["thought"])}</div>' if s.get("thought") else "") + dead + err + "</div>")
     quote = f'<p class="quote">{_esc(r["quote"])}</p>' if r.get("quote") else ""
@@ -273,12 +284,14 @@ def _as_list(v) -> list:
 
 
 def _findings(res: dict) -> str:
+    by_first = {(p.get("first") or p.get("name", "")).split(",")[0]: p for p in _people(res).values()}
     if not res["findings"]:
         return '<p class="note">No barriers found for these people on this task.</p>'
     out = []
     for n, f in enumerate(res["findings"], 1):
         sev = f.get("severity") if f.get("severity") in SEV else "major"
-        who = ", ".join(_esc(w) for w in f.get("who", []))
+        who = "".join(f'<span class="whoi" title="{_esc(by_first.get(w, {}).get("condition", ""))}">'
+                      f'{icon(by_first[w]["icon"], 13) if w in by_first else ""}{_esc(w)}</span>' for w in f.get("who", []))
         ev = "".join(f"<li>{_esc(e)}</li>" for e in _as_list(f.get("evidence")))
         fixes = "".join(f"<li>{_esc(x)}</li>" for x in _as_list(f.get("fix")))
         out.append(f'<article class="find {sev}"><div class="fnum">{n:02d}</div><div><div class="fmeta"><span class="mark">{SEV[sev]}</span>'
@@ -292,6 +305,14 @@ def _findings(res: dict) -> str:
 def _glance(res: dict) -> str:
     items = res.get("summary") or []
     return ('<ul class="glance">' + "".join(f"<li>{_esc(s)}</li>" for s in items) + "</ul>") if items else "<div></div>"
+
+
+LIGHTBOX = """<div id="lb" hidden><div class="pic"></div><div class="cap"></div><div class="x">CLICK OR PRESS ESC TO CLOSE</div></div>
+<script>(function(){var lb=document.getElementById('lb'),pic=lb.querySelector('.pic'),cap=lb.querySelector('.cap');
+document.addEventListener('click',function(e){var t=e.target.closest&&e.target.closest('[data-zoom]');
+if(t){pic.style.backgroundImage=getComputedStyle(t).backgroundImage;cap.textContent=t.getAttribute('data-cap')||'';lb.hidden=false;}
+else if(!lb.hidden&&lb.contains(e.target)){lb.hidden=true;}});
+document.addEventListener('keydown',function(e){if(e.key==='Escape')lb.hidden=true;});})();</script>"""
 
 
 def build_html(res: dict, personas: dict, shots: Path, viewport=(420, 860)) -> str:
@@ -332,6 +353,7 @@ def build_html(res: dict, personas: dict, shots: Path, viewport=(420, 860)) -> s
 <h2>What got in the way</h2>{_findings(res)}
 <h2>Sessions</h2><div style="display:grid;gap:28px">{''.join(cols)}</div>
 {heat}
+{LIGHTBOX}
 <p class="foot">Generated by Hallway Test for Hermes Agent. Perception (text size, contrast, colour vision, screen-reader
 access) and abilities (mouse, keyboard, tremor) are enforced by code; the model only decides what each person does next.
 Simulated people are not a substitute for testing with real users.</p></div>"""
