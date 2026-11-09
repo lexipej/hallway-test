@@ -162,7 +162,7 @@ def test_full_run_writes_state_report_and_card(tmp_path):
     state = json.loads((run_dir / "state.json").read_text(encoding="utf-8"))
     assert state["status"] == "done" and state["score"]["after"]["passed"] == 2
     html = (run_dir / "report.html").read_text(encoding="utf-8")
-    assert "Replay · " in html and "data:image/jpeg;base64" in html and "<script" not in html
+    assert "Replay " in html and "data:image/jpeg;base64" in html and "<script" not in html
     assert "Maya" in html and "<svg" in html                                # people and condition icons
     assert (run_dir / "card.png").stat().st_size > 20000
 

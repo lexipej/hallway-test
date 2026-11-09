@@ -120,25 +120,26 @@ function Avatar({ id, person, size = 40 }) {
   const avatars = useAvatars()
   const src = avatars[id]
   return jsx('div', {
-    style: { width: size, height: size, flex: 'none', overflow: 'hidden', background: 'var(--ui-accent)', color: 'var(--ui-base, #fff)',
-             display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: size * 0.38 },
+    style: { width: size, height: size, flex: 'none', overflow: 'hidden', borderRadius: '50%', background: 'var(--ui-accent)', color: 'var(--ui-base, #fff)',
+             display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: size * 0.38 },
     children: src ? jsx('img', { src, alt: '', style: { width: '100%', height: '100%', objectFit: 'cover', display: 'block' } }) : person.initials
   })
 }
 
 function Chip({ person }) {
   return jsxs('span', {
-    style: { ...caps, display: 'inline-flex', alignItems: 'center', gap: 5, color: 'var(--ui-accent)', border: '1px solid var(--ui-accent)', padding: '3px 6px' },
+    style: { display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, color: 'var(--ui-text-tertiary)', whiteSpace: 'nowrap' },
     children: [jsx(Icon, { name: person.icon, size: 12 }), person.condition]
   })
 }
 
-function Stamp({ status }) {
-  const [ic, color] = STAMP[status] || ['tap', 'var(--ui-accent)']
+function Stamp({ status, step }) {
+  const [ic, color] = STAMP[status] || ['tap', 'var(--ui-text-tertiary)']
   const live = !DONE.has(status)
   return jsxs('span', {
-    style: { ...caps, display: 'inline-flex', alignItems: 'center', gap: 5, color, border: live ? 'none' : `1.5px solid ${color}`, padding: live ? 0 : '3px 6px', whiteSpace: 'nowrap' },
-    children: [live ? jsx('span', { style: { width: 7, height: 7, borderRadius: 7, background: 'var(--ui-accent)', boxShadow: '0 0 0 3px color-mix(in srgb, var(--ui-accent) 25%, transparent)' } }) : jsx(Icon, { name: ic, size: 12 }), STATUS[status] || status]
+    style: { display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 600, color: live ? 'var(--ui-text-tertiary)' : color, whiteSpace: 'nowrap' },
+    children: [live ? jsx('span', { style: { width: 6, height: 6, borderRadius: 6, background: 'var(--ui-accent)' } }) : jsx(Icon, { name: ic, size: 13 }),
+               live && step ? `Step ${step}` : (STATUS[status] || status)]
   })
 }
 
@@ -148,47 +149,36 @@ function LiveView({ run }) {
   const variants = run.variants || ['before']
   const finished = people.filter(p => DONE.has(p.status)).length
   return jsxs('div', {
-    style: { display: 'grid', gap: 18 },
+    style: { display: 'grid', gap: 28, maxWidth: 1200 },
     children: [
-      jsxs('div', { style: { display: 'grid', gap: 8 }, children: [
-        jsxs('div', { style: { ...caps, display: 'flex', gap: 14, color: 'var(--ui-text-tertiary)' }, children: [
-          jsx('span', { style: { color: 'var(--ui-accent)' }, children: '● Live session' }),
-          jsx('span', { children: `${finished}/${people.length} done` }),
-          run.status === 'writing report' && jsx('span', { children: 'Writing the report…' })
-        ] }),
-        jsx('div', { style: { fontSize: 26, fontWeight: 800, letterSpacing: '-.03em', lineHeight: 1.1 }, children: run.title || run.url }),
-        jsxs('div', { style: { display: 'flex', border: '1px solid var(--ui-stroke-secondary)', maxWidth: 820 }, children: [
-          jsx('div', { style: { ...caps, padding: '10px 10px', borderRight: '1px solid var(--ui-stroke-secondary)', color: 'var(--ui-text-tertiary)' }, children: 'Task' }),
-          jsx('div', { style: { padding: '8px 12px', fontSize: 14 }, children: run.task })
-        ] })
+      jsxs('div', { style: { display: 'grid', gap: 6 }, children: [
+        jsx('div', { style: { fontSize: 12, color: 'var(--ui-text-tertiary)' },
+          children: run.status === 'writing report' ? 'Writing the report…' : `Live · ${finished} of ${people.length} done` }),
+        jsx('div', { style: { fontSize: 24, fontWeight: 750, letterSpacing: '-.02em', lineHeight: 1.15 }, children: run.title || run.url }),
+        jsx('div', { style: { fontSize: 14, color: 'var(--ui-text-secondary, var(--ui-text-tertiary))', maxWidth: 760 }, children: run.task })
       ] }),
-      ...variants.map(v => jsxs('div', { children: [
-        variants.length > 1 && jsx('div', { style: { ...caps, color: 'var(--ui-text-tertiary)', margin: '0 0 8px' }, children: v === 'before' ? 'Before' : 'After changes' }),
+      ...variants.map(v => jsxs('div', { style: { display: 'grid', gap: 10 }, children: [
+        variants.length > 1 && jsx('div', { style: { fontSize: 13, fontWeight: 600, color: 'var(--ui-text-tertiary)' }, children: v === 'before' ? 'Before' : 'After changes' }),
         jsx('div', {
-          style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(190px, 1fr))', gap: 10 },
-          children: people.filter(p => p.variant === v).map((p, i) => {
+          style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 14 },
+          children: people.filter(p => p.variant === v).map(p => {
             const person = personOf(run, p.persona)
             return jsxs('div', {
-              style: { border: '1px solid var(--ui-stroke-secondary)', background: 'var(--ui-bg-elevated)', display: 'grid', alignContent: 'start' },
+              style: { background: 'var(--ui-bg-elevated)', borderRadius: 10, padding: 12, display: 'grid', gap: 10, alignContent: 'start' },
               children: [
-                jsxs('div', { style: { ...caps, display: 'flex', justifyContent: 'space-between', padding: '7px 9px', borderBottom: '1px solid var(--ui-stroke-secondary)', color: 'var(--ui-text-tertiary)' }, children: [
-                  jsx('span', { children: `Cam ${String(i + 1).padStart(2, '0')}` }),
-                  jsx(Stamp, { status: p.status })
-                ] }),
-                jsxs('div', { style: { display: 'flex', gap: 9, alignItems: 'center', padding: 9 }, children: [
-                  jsx(Avatar, { id: p.persona, person, size: 40 }),
-                  jsxs('div', { style: { display: 'grid', gap: 4, minWidth: 0 }, children: [
-                    jsx('div', { style: { fontWeight: 800, fontSize: 15, letterSpacing: '-.01em' }, children: person.first || person.name }),
+                jsxs('div', { style: { display: 'flex', gap: 10, alignItems: 'center' }, children: [
+                  jsx(Avatar, { id: p.persona, person, size: 34 }),
+                  jsxs('div', { style: { display: 'grid', gap: 2, minWidth: 0, flex: 1 }, children: [
+                    jsxs('div', { style: { display: 'flex', justifyContent: 'space-between', gap: 6, alignItems: 'baseline' }, children: [
+                      jsx('span', { style: { fontWeight: 650, fontSize: 14 }, children: person.first || person.name }),
+                      jsx(Stamp, { status: p.status, step: p.step })
+                    ] }),
                     jsx(Chip, { person })
                   ] })
                 ] }),
-                jsxs('div', { style: { position: 'relative', margin: '0 9px' }, children: [
-                  p.thumb ? jsx('img', { src: p.thumb, alt: `What ${person.first || 'this person'} sees`, style: { width: '100%', display: 'block', border: '1px solid var(--ui-stroke-secondary)' } })
-                    : jsx('div', { style: { aspectRatio: '420 / 860', border: '1px dashed var(--ui-stroke-secondary)' } }),
-                  p.step > 0 && jsx('span', { style: { ...caps, position: 'absolute', left: 6, top: 6, background: 'var(--ui-accent)', color: 'var(--ui-base, #fff)', padding: '3px 6px' }, children: `Step ${String(p.step).padStart(2, '0')}` })
-                ] }),
-                (p.quote || p.thought) && jsx('div', { style: { margin: 9, paddingLeft: 9, borderLeft: '3px solid var(--ui-accent)', fontSize: 13, fontWeight: 600, lineHeight: 1.35 }, children: `“${p.quote || p.thought}”` }),
-                p.action && !DONE.has(p.status) && jsx('div', { style: { ...mono, fontSize: 11, color: 'var(--ui-text-tertiary)', padding: '0 9px 9px' }, children: `› ${p.action}` })
+                p.thumb ? jsx('img', { src: p.thumb, alt: `What ${person.first || 'this person'} sees`, style: { width: '100%', display: 'block', borderRadius: 6 } })
+                  : jsx('div', { style: { aspectRatio: '420 / 860', borderRadius: 6, background: 'var(--ui-bg-tertiary, transparent)' } }),
+                (p.quote || p.thought) && jsx('div', { style: { fontSize: 13, lineHeight: 1.4, color: 'var(--ui-text-secondary, inherit)' }, children: `“${p.quote || p.thought}”` })
               ]
             }, p.key)
           })
