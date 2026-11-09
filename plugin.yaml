@@ -20,5 +20,5 @@ python_dependencies:
   - "playwright>=1.50,<2"
 config_schema:
   max_steps: {type: int, default: 16, description: "Most actions per person per run (keyboard-only people get 1.8x)."}
-  parallel: {type: int, default: 10, description: "How many people browse at the same time."}
+  parallel: {type: int, default: 3, description: "How many browsers run at the same time (1-6). Lower it on slower machines; each one can use 300-600 MB."}
   time_budget_seconds: {type: int, default: 330, description: "Stop everyone after this long so the tool call finishes inside Hermes's tool timeout."}

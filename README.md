@@ -64,7 +64,7 @@ Ask Hermes in plain words, or call the `hallway_test` tool:
 - Python dependency: `playwright` (installed with the plugin). For the browser it uses Playwright's Chromium if
   present, otherwise the Microsoft Edge or Google Chrome already on your machine. It never downloads a browser
   itself; to use Playwright's Chromium, run `python -m playwright install chromium` in the Hermes environment.
-- Optional settings (`plugins.entries.hallway-test.settings`): `max_steps` (16), `parallel` (10),
+- Optional settings (`plugins.entries.hallway-test.settings`): `max_steps` (16), `parallel` (3, max 6),
   and `time_budget_seconds` (330).
 
 A run makes one model call per person per step plus one for the findings: typically 40–120 short calls and

@@ -98,7 +98,7 @@ def _run(ctx, args, url, is_demo, compare, task, success, viewport, max_steps, t
     from .ht.run import run_test
     return run_test(url, task, _make_complete(ctx, 700), pick(args.get("personas")), _data_dir(),
                     success_text=success, compare_url=compare, facts=args.get("facts", ""), max_steps=max_steps,
-                    parallel=int(ctx.get_config("parallel", 10)), viewport=viewport, title=title,
+                    parallel=max(1, min(int(ctx.get_config("parallel", 3)), 6)), viewport=viewport, title=title,
                     findings_complete=_make_complete(ctx, 8000, timeout=180),
                     time_budget=float(ctx.get_config("time_budget_seconds", 330)))
 

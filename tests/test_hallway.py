@@ -4,6 +4,7 @@ import json
 import random
 import sys
 import threading
+import time
 import types
 from pathlib import Path
 
@@ -129,10 +130,11 @@ def test_audit_flags_demo_barriers(pw):
 
 # ---------------------------------------------------------------- end to end (scripted brain)
 def _per_thread_brain():
+    """One scripted brain per persona run (pool threads are reused, so start fresh at step 1)."""
     local = threading.local()
 
     def complete(msgs):
-        if not hasattr(local, "c"):
+        if not hasattr(local, "c") or "Step 1 of" in msgs[-1]["content"]:
             local.c = fake_brain.make()
         return local.c(msgs)
     return complete
@@ -324,3 +326,33 @@ def test_audit_avoids_common_false_positives(pw, tmp_path):
 def test_findings_prompt_ties_severity_to_outcomes():
     from ht.brain import FINDINGS_PROMPT
     assert "Never call something a blocker for a person who finished" in FINDINGS_PROMPT
+
+
+def test_animated_pages_are_slowed_and_memory_is_checked(pw, tmp_path):
+    from ht import run as R
+    page = tmp_path / "anim.html"
+    page.write_text("<script>window.frames_=0;(function f(){window.frames_++;requestAnimationFrame(f)})()</script>",
+                    encoding="utf-8")
+    pg = pw.new_page()
+    pg.add_init_script(R.SLOW_FRAMES_JS)
+    pg.goto(page.as_uri())
+    pg.wait_for_timeout(1000)
+    assert pg.evaluate("window.frames_") <= 8          # ~5 per second instead of ~60
+    pg.close()
+    assert R.free_memory_mb() > 0
+    R.wait_for_memory(0, need_mb=1)                     # plenty free: returns at once
+    with pytest.raises(RuntimeError, match="free memory"):
+        R.wait_for_memory(time.time() - 1, need_mb=1e12)
+
+
+def test_stuck_persona_does_not_hold_the_run(tmp_path, monkeypatch):
+    from ht import run as R
+    import time as _t
+
+    def stuck(*a, **k):
+        _t.sleep(60)
+    monkeypatch.setattr(R, "run_persona", stuck)
+    t0 = _t.time()
+    with pytest.raises(RuntimeError, match="No one could start"):
+        R.run_test("http://127.0.0.1:9/", "x", lambda m: "", pick(["first_timer"]), tmp_path, time_budget=1)
+    assert _t.time() - t0 < 30

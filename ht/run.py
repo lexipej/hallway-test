@@ -9,6 +9,7 @@ import threading
 import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import TimeoutError as FuturesTimeout
 from pathlib import Path
 from typing import Callable, Optional
 
@@ -76,12 +77,62 @@ class RunState:
 _install_lock = threading.Lock()
 
 
+# Personas don't need smooth animation: these keep many headless browsers from swamping the machine.
+LIGHT_ARGS = ["--mute-audio", "--disable-extensions", "--disable-background-networking", "--no-first-run",
+              "--js-flags=--max-old-space-size=512", "--renderer-process-limit=2"]
+
+# Redraw animated pages (3D, canvas, motion) ~5 times a second instead of 60. Screenshots still show the
+# current frame; the CPU cost of WebGL drawn in software drops by an order of magnitude.
+SLOW_FRAMES_JS = """(() => {
+  const ids = new Map(); let n = 0;
+  window.requestAnimationFrame = cb => { const id = ++n; ids.set(id, setTimeout(() => { ids.delete(id); cb(performance.now()); }, 200)); return id; };
+  window.cancelAnimationFrame = id => { clearTimeout(ids.get(id)); ids.delete(id); };
+})();"""
+
+MIN_FREE_MB = 1200
+
+
+def free_memory_mb() -> float:
+    """Available physical memory in MB (Windows, Linux, macOS best effort); a large number if unknown."""
+    try:
+        import sys
+        if sys.platform == "win32":
+            import ctypes
+
+            class MS(ctypes.Structure):
+                _fields_ = [("dwLength", ctypes.c_ulong), ("dwMemoryLoad", ctypes.c_ulong),
+                            ("ullTotalPhys", ctypes.c_ulonglong), ("ullAvailPhys", ctypes.c_ulonglong),
+                            ("ullTotalPageFile", ctypes.c_ulonglong), ("ullAvailPageFile", ctypes.c_ulonglong),
+                            ("ullTotalVirtual", ctypes.c_ulonglong), ("ullAvailVirtual", ctypes.c_ulonglong),
+                            ("ullAvailExtendedVirtual", ctypes.c_ulonglong)]
+            ms = MS(); ms.dwLength = ctypes.sizeof(MS)
+            ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(ms))
+            return ms.ullAvailPhys / 2**20
+        with open("/proc/meminfo", encoding="utf-8") as fh:
+            for line in fh:
+                if line.startswith("MemAvailable:"):
+                    return int(line.split()[1]) / 1024
+    except Exception:  # noqa: BLE001 - unknown platform: don't block
+        pass
+    return 1e9
+
+
+def wait_for_memory(deadline: float, need_mb: float = MIN_FREE_MB) -> None:
+    """Don't start another browser on a machine that is short of memory: wait a little, then refuse."""
+    give_up = time.time() + 45
+    while free_memory_mb() < need_mb:
+        if time.time() > give_up or (deadline and time.time() > deadline):
+            raise RuntimeError(f"skipped: less than {need_mb / 1024:.1f} GB of free memory, so this person's browser "
+                               "was not started (close some apps or lower the parallel setting)")
+        time.sleep(3)
+
+
 def launch(pw):
     """Bundled Chromium, else the Edge/Chrome already on the machine."""
     errors = []
     for kw in ({}, {"channel": "msedge"}, {"channel": "chrome"}):
         try:
-            return pw.chromium.launch(headless=True, **kw)
+            return pw.chromium.launch(headless=True, args=LIGHT_ARGS, **kw)
         except Exception as exc:  # try the next browser
             errors.append(f"{kw.get('channel', 'chromium')}: {str(exc).splitlines()[0]}")
     raise RuntimeError("No browser available. Run `python -m playwright install chromium` in the Hermes "
@@ -108,10 +159,13 @@ def run_persona(url: str, p: Persona, variant: str, task: str, complete: Complet
     def seen_success(raw: dict) -> bool:
         return bool(want) and (want in raw.get("text", "").lower() or want in raw.get("title", "").lower())
 
+    wait_for_memory(deadline)
     with sync_playwright() as pw:
         br = launch(pw)
         try:
-            page = br.new_page(viewport={"width": viewport[0], "height": viewport[1]})
+            page = br.new_page(viewport={"width": viewport[0], "height": viewport[1]}, reduced_motion="reduce")
+            page.set_default_timeout(15000)
+            page.add_init_script(SLOW_FRAMES_JS)
             page.goto(url, wait_until="domcontentloaded", timeout=30000)
             try:
                 page.wait_for_load_state("networkidle", timeout=4000)
@@ -262,7 +316,7 @@ def findings(task: str, results: list[dict], personas: dict, complete: Optional[
 
 def run_test(url: str, task: str, complete: Complete, personas: list[Persona], data_dir: Path,
              success_text: str = "", compare_url: str = "", facts: str = "", max_steps: int = 20,
-             parallel: int = 10, viewport=(420, 860), title: str = "", label: str = "",
+             parallel: int = 3, viewport=(420, 860), title: str = "", label: str = "",
              findings_complete: Optional[Complete] = None, time_budget: float = 330) -> dict:
     run_id = time.strftime("%Y%m%d-%H%M%S-") + uuid.uuid4().hex[:4]
     run_dir = Path(data_dir) / "runs" / run_id
@@ -276,18 +330,26 @@ def run_test(url: str, task: str, complete: Complete, personas: list[Persona], d
     deadline = time.time() + time_budget if time_budget else 0
     results: list[dict] = []
     try:
-        with ThreadPoolExecutor(max_workers=max(1, min(parallel, len(jobs)))) as pool:
-            futs = [pool.submit(run_persona, u, p, v, task, complete, run_dir, state, success_text, facts,
-                                max_steps, viewport, 7, deadline) for v, u, p in jobs]
-            for (v, u, p), f in zip(jobs, futs):
-                try:
-                    results.append(f.result())
-                except Exception as exc:
-                    err = str(exc).splitlines()[0][:300]
-                    state.update(f"{v}:{p.id}", status="error", reason=err)
-                    results.append({"persona": p.id, "variant": v, "status": "error", "reason": err, "steps": [],
-                                    "n_steps": 0, "dead_clicks": 0, "quote": "", "first_screen_clicks": [],
-                                    "first_shot": "", "final_shot": "", "seconds": 0, "audit": {}})
+        pool = ThreadPoolExecutor(max_workers=max(1, min(parallel, len(jobs))))
+        futs = [pool.submit(run_persona, u, p, v, task, complete, run_dir, state, success_text, facts,
+                            max_steps, viewport, 7, deadline) for v, u, p in jobs]
+        for (v, u, p), f in zip(jobs, futs):
+            try:
+                # Never wait past the budget for a stuck browser: the tool must answer inside Hermes's timeout.
+                wait = max(5.0, deadline + 20 - time.time()) if deadline else None
+                res = f.result(timeout=wait)
+                if not isinstance(res, dict):
+                    raise RuntimeError("this person's browser stopped without a result")
+                results.append(res)
+            except Exception as exc:
+                f.cancel()
+                err = "time ran out (the page was too slow to respond)" if isinstance(exc, FuturesTimeout) else \
+                    str(exc).splitlines()[0][:300]
+                state.update(f"{v}:{p.id}", status="error", reason=err)
+                results.append({"persona": p.id, "variant": v, "status": "error", "reason": err, "steps": [],
+                                "n_steps": 0, "dead_clicks": 0, "quote": "", "first_screen_clicks": [],
+                                "first_shot": "", "final_shot": "", "seconds": 0, "audit": {}})
+        pool.shutdown(wait=False, cancel_futures=True)
         if results and all(r["status"] == "error" for r in results):
             raise RuntimeError(f"No one could start: {results[0]['reason'][:300]}")
         state.set(status="writing report")
