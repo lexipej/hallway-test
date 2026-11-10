@@ -492,3 +492,12 @@ def test_sighted_keyboard_only_people_see_focus(pw):
     obs = B.observe(pg, p)["text"]
     assert "KEYBOARD FOCUS IS ON: button 'Row A, seat 3, available'" in obs and "(keyboard focus is here)" in obs
     pg.close()
+
+
+def test_off_site():
+    from ht.run import off_site
+    assert off_site("https://todomvc.com/examples/react/", "https://github.com/tastejs") == "github.com"
+    assert off_site("https://www.gov.uk/x", "https://visas.service.gov.uk/y") == ""
+    assert off_site("https://www.gov.uk/x", "https://www.example.co.uk/") == "www.example.co.uk"
+    assert off_site("http://127.0.0.1:5000/", "http://127.0.0.1:5000/done") == ""
+    assert off_site("https://a.example.com/", "https://b.example.com/") == ""

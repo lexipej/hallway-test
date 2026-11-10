@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import os
 import random
+from urllib.parse import urlparse
 import re
 import threading
 import time
@@ -139,6 +140,25 @@ def launch(pw):
                        "environment, or install Microsoft Edge or Chrome. Details: " + " | ".join(errors))
 
 
+def _site(host: str) -> str:
+    host = (host or "").lower().removeprefix("www.")
+    parts = host.split(".")
+    if host.replace(".", "").isdigit() or len(parts) <= 2:
+        return host
+    # keep three labels for short second-level domains (gov.uk, com.ph, co.jp)
+    return ".".join(parts[-3:] if len(parts[-2]) <= 3 and len(parts[-1]) == 2 else parts[-2:])
+
+
+def off_site(start: str, now: str) -> str:
+    """The new host if the page left the site under test, else ''."""
+    a, b = urlparse(start), urlparse(now)
+    if b.scheme not in ("http", "https") or not b.hostname:
+        return ""
+    x, y = (h.lower().removeprefix("www.") for h in (a.hostname or "", b.hostname))
+    same = x == y or y.endswith("." + x) or x.endswith("." + y) or _site(x) == _site(y)
+    return "" if same else b.hostname
+
+
 def run_persona(url: str, p: Persona, variant: str, task: str, complete: Complete, run_dir: Path,
                 state: RunState, success_text: str = "", facts: str = "", max_steps: int = 20,
                 viewport=(420, 860), seed: int = 7, deadline: float = 0) -> dict:
@@ -242,6 +262,17 @@ def run_persona(url: str, p: Persona, variant: str, task: str, complete: Complet
                 except Exception:
                     page.wait_for_timeout(800)
                     after = B.probe(page)
+                # Stay on the site under test: a link to GitHub or a sponsor is not part of the task.
+                left = off_site(url, page.url)
+                if left:
+                    rec["offsite"] = left
+                    try:
+                        page.go_back(wait_until="domcontentloaded", timeout=10000)
+                    except Exception:
+                        page.goto(obs["raw"].get("url") or url, wait_until="domcontentloaded", timeout=30000)
+                    brain.record(action, thought, f"that opened a different website ({left}), so you came back; "
+                                 "the task is on this site")
+                    continue
                 # Moving the typing cursor into a field is a visible change too (a tap on an empty field "worked").
                 changed = B.fingerprint(after) != fp or after.get("focus") != obs["raw"].get("focus")
                 rec["changed"] = changed
