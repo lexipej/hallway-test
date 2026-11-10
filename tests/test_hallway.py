@@ -116,8 +116,9 @@ def test_actions_are_limited_by_ability(pw):
     with pytest.raises(B.ActionError):
         B.act(pg, PERSONAS["keyboard"], obs, "press F12", rng)
     obs = B.observe(pg, PERSONAS["first_timer"])
+    assert B.act(pg, PERSONAS["first_timer"], obs, "press Enter", rng)["kind"] == "key"   # sighted people use keys too
     with pytest.raises(B.ActionError):
-        B.act(pg, PERSONAS["first_timer"], obs, "press Tab", rng)
+        B.act(pg, PERSONAS["first_timer"], obs, "press F12", rng)
     with pytest.raises(B.ActionError):
         B.act(pg, PERSONAS["first_timer"], obs, "click 999", rng)
     res = B.act(pg, PERSONAS["shaky"], obs, "click 3", rng)

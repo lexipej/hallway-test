@@ -206,7 +206,7 @@ def run_persona(url: str, p: Persona, variant: str, task: str, complete: Complet
                 if not action:
                     invalid += 1
                     brain.record("(invalid reply)", "", "reply was not valid JSON; answer with JSON only")
-                    if invalid >= 3:
+                    if invalid >= 5:  # some models send empty replies in bursts
                         status, reason = "error", d.get("error", "model kept replying without an action")
                         break
                     continue

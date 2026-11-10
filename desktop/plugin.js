@@ -136,8 +136,9 @@ function Avatar({ id, person, size = 40 }) {
 function Chip({ person }) {
   return jsxs('span', {
     style: { ...mono, display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase',
-             letterSpacing: '.03em', color: 'var(--ui-accent)', whiteSpace: 'nowrap' },
-    children: [jsx(Icon, { name: person.icon, size: 12 }), person.condition]
+             letterSpacing: '.03em', color: 'var(--ui-accent)', whiteSpace: 'nowrap', minWidth: 0, maxWidth: '100%' },
+    children: [jsx(Icon, { name: person.icon, size: 12 }),
+      jsx('span', { style: { overflow: 'hidden', textOverflow: 'ellipsis' }, children: person.condition })]
   })
 }
 
@@ -180,14 +181,12 @@ function LiveView({ run }) {
               children: [
                 jsxs('div', { style: { display: 'flex', gap: 10, alignItems: 'center' }, children: [
                   jsx(Avatar, { id: p.persona, person, size: 34 }),
-                  jsxs('div', { style: { display: 'grid', gap: 2, minWidth: 0, flex: 1 }, children: [
-                    jsxs('div', { style: { display: 'flex', justifyContent: 'space-between', gap: 6, alignItems: 'baseline' }, children: [
-                      jsx('span', { style: { ...head, fontSize: 20, lineHeight: 1 }, children: person.first || person.name }),
-                      jsx(Stamp, { status: p.status, step: p.step })
-                    ] }),
+                  jsxs('div', { style: { display: 'grid', gap: 3, minWidth: 0, flex: 1 }, children: [
+                    jsx('span', { style: { ...head, fontSize: 20, lineHeight: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }, children: person.first || person.name }),
                     jsx(Chip, { person })
                   ] })
                 ] }),
+                jsx('div', { style: { minHeight: 22 }, children: jsx(Stamp, { status: p.status, step: p.step }) }),
                 p.thumb ? jsx('img', { src: p.thumb, alt: `What ${person.first || 'this person'} sees`, style: { width: '100%', display: 'block', border: '1.5px solid var(--ui-stroke-secondary)' } })
                   : jsx('div', { style: { aspectRatio: '420 / 860', borderRadius: 6, background: 'var(--ui-bg-tertiary, transparent)' } }),
                 (p.quote || p.thought) && jsxs('div', { style: { position: 'relative', paddingLeft: 18, fontSize: 13, lineHeight: 1.4, color: 'var(--ui-text-secondary, inherit)' }, children: [

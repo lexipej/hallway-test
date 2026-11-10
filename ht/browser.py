@@ -116,8 +116,8 @@ DEUT_SVG = ('<svg id="ht-svg" aria-hidden="true" style="position:absolute;width:
             '<feColorMatrix type="matrix" values="0.367 0.861 -0.228 0 0  0.280 0.673 0.047 0 0  '
             '-0.012 0.043 0.969 0 0  0 0 0 1 0"/></filter></svg>')
 
-MOUSE_ACTIONS = ("click <ref> | type <ref> <text> | select <ref> <option text> | scroll down | scroll up | "
-                 "scroll to top | scroll to bottom | "
+MOUSE_ACTIONS = ("click <ref> | type <ref> <text> | select <ref> <option text> | press Enter | press Tab | "
+                 "press Escape | press Backspace | scroll down | scroll up | scroll to top | scroll to bottom | "
                  "done | give_up <reason>")
 KEY_ACTIONS = ("press Tab | press Shift+Tab | press Enter | press Space | press ArrowDown | press ArrowUp | "
                "press ArrowLeft | press ArrowRight | "
@@ -267,6 +267,9 @@ def act(page, p, obs: dict, action: str, rng: random.Random) -> dict:
                 raise ActionError(f"[{m[1]}] is not a dropdown")
             page.locator(f'[data-ht="{it["ref"]}"]').select_option(label=m[2].strip().strip('"'))
             return {"kind": "select", "click": [it["x"], it["y"]], "aimed": [it["x"], it["y"]]}
+        if m := re.fullmatch(r"press\s+(Enter|Tab|Shift\+Tab|Escape|Backspace)", a):  # sighted people use keys too
+            page.keyboard.press(m[1])
+            return {"kind": "key", "key": m[1]}
         if a in ("scroll down", "scroll up"):
             page.mouse.wheel(0, 600 if a.endswith("down") else -600)
             return {"kind": "scroll"}
