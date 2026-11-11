@@ -156,7 +156,8 @@ class Guard:
                 if guard.reason(target):
                     guard._refuse(target)
                     return route.abort("blockedbyclient")
-                body = ('<!doctype html><meta charset="utf-8"><meta http-equiv="refresh" content="0;url=%s">'
+                body = ('<!doctype html><meta charset="utf-8"><meta name="hallway-hop" content="1">'
+                        '<meta http-equiv="refresh" content="0;url=%s">'
                         "<script>location.replace(%s)</script>") % (
                             html.escape(target, quote=True), _js_string(target))
                 return route.fulfill(status=200, content_type="text/html; charset=utf-8", body=body)
@@ -185,3 +186,20 @@ class Guard:
 def _js_string(s: str) -> str:
     import json
     return json.dumps(s).replace("<", "\\u003c")
+
+
+def settle(page, timeout_ms: int = 8000) -> None:
+    """Wait while the page is one of our in-between redirect pages, so nobody is shown an empty screen."""
+    waited = 0
+    while waited < timeout_ms:
+        try:
+            if not page.evaluate("!!document.querySelector('meta[name=\"hallway-hop\"]')"):
+                try:
+                    page.wait_for_load_state("domcontentloaded", timeout=3000)
+                except Exception:
+                    pass
+                return
+        except Exception:
+            pass   # mid-navigation: the old document is gone, ask again
+        page.wait_for_timeout(150)
+        waited += 150

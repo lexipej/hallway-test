@@ -605,7 +605,10 @@ def test_netguard_in_browser(pw):
             pg.wait_for_timeout(600)
             assert len(guard.blocked) > n and "169.254" not in pg.url
             pg.goto(base + "/page")
+            from ht.netguard import settle
             pg.click("#go")                             # POST -> 303 with a cookie: logins keep working
+            settle(pg)                                  # never observe the in-between redirect page
+            assert pg.evaluate("!document.querySelector('meta[name=\"hallway-hop\"]')")
             pg.wait_for_url("**/home")
             assert pg.inner_text("h1") == "home sid=abc"
             ctx.close()

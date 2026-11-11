@@ -16,7 +16,7 @@ from urllib.parse import urlparse
 
 from . import browser as B
 from .brain import FINDINGS_PROMPT, Brain, parse_findings
-from .netguard import Guard, normalise
+from .netguard import Guard, normalise, settle
 from .personas import Persona
 
 Complete = Callable[[list[dict]], str]
@@ -199,6 +199,7 @@ def run_persona(url: str, p: Persona, variant: str, task: str, complete: Complet
             except Exception:   # one more try after a pause: several browsers opening one site can be throttled
                 page.wait_for_timeout(3000 + rng.randrange(4000))
                 page.goto(url, wait_until="domcontentloaded", timeout=30000)
+            settle(page)
             try:
                 page.wait_for_load_state("networkidle", timeout=4000)
             except Exception:
@@ -212,6 +213,7 @@ def run_persona(url: str, p: Persona, variant: str, task: str, complete: Complet
                 if deadline and time.time() > deadline:
                     status, reason = "out_of_steps", "time ran out"
                     break
+                settle(page)
                 obs = B.observe(page, p)
                 fp = B.fingerprint(obs["raw"])
                 lay = B.layout(obs["raw"])
@@ -271,9 +273,11 @@ def run_persona(url: str, p: Persona, variant: str, task: str, complete: Complet
                 try:
                     page.wait_for_timeout(250)
                     page.wait_for_load_state("domcontentloaded", timeout=5000)
+                    settle(page)
                     after = B.probe(page)
                 except Exception:
                     page.wait_for_timeout(800)
+                    settle(page)
                     after = B.probe(page)
                 # Stay on the site under test: a link to GitHub or a sponsor is not part of the task.
                 left = off_site(url, page.url)
