@@ -501,3 +501,125 @@ def test_off_site():
     assert off_site("https://www.gov.uk/x", "https://www.example.co.uk/") == "www.example.co.uk"
     assert off_site("http://127.0.0.1:5000/", "http://127.0.0.1:5000/done") == ""
     assert off_site("https://a.example.com/", "https://b.example.com/") == ""
+
+
+def test_netguard_rules():
+    from ht.netguard import BlockedURL, Guard, normalise
+    dns = {"lan.test": ["10.0.0.5"], "rebind.test": ["93.184.216.34", "169.254.169.254"], "ok.test": ["93.184.216.34"]}
+    g = Guard(resolver=lambda h: dns.get(h, []))
+    for ok in ("http://localhost:3000/x", "http://127.0.0.1:8/", "http://[::1]/", "https://ok.test/", "about:blank",
+               "http://app.localhost:3000/"):
+        assert g.reason(ok) == "", ok
+    for bad in ("file:///etc/passwd", "FILE:/etc/passwd", "javascript:alert(1)", "ftp://ok.test/", "chrome://settings",
+                "http://169.254.169.254/latest/meta-data", "http://[fd00:ec2::254]/", "http://metadata.google.internal/",
+                "http://[::ffff:169.254.169.254]/", "http://2852039166/", "http://0xa9.0xfe.0xa9.0xfe/",
+                "http://192.168.1.1/", "http://10.0.0.1/", "http://172.16.3.4/", "http://[fc00::1]/",
+                "http://lan.test/", "http://rebind.test/", "http://0.0.0.0/", "ws://192.168.1.1/"):
+        assert g.reason(bad), bad
+    lan = Guard(allow_private=True, resolver=lambda h: dns.get(h, []))
+    assert lan.reason("http://192.168.1.1/") == "" and lan.reason("http://lan.test/") == ""
+    assert lan.reason("http://169.254.169.254/") and lan.reason("http://rebind.test/") and lan.reason("file:///x")
+    assert normalise("localhost:3000/signup") == "http://localhost:3000/signup"
+    assert normalise("example.com/a") == "http://example.com/a" and normalise("file:///etc/passwd") == "file:///etc/passwd"
+    with pytest.raises(BlockedURL):
+        g.check("file:///etc/passwd")
+    with pytest.raises(ValueError):
+        g.check(normalise("169.254.169.254/latest"))
+
+
+def test_netguard_in_browser(pw):
+    """Redirect hops, script navigations, frames and links to refused addresses never load; normal flows still work."""
+    import threading
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+    from ht.netguard import Guard
+    hits = []
+
+    class H(BaseHTTPRequestHandler):
+        def log_message(self, *a):
+            pass
+
+        def _send(self, code, body=b"", headers=()):
+            self.send_response(code)
+            for k, v in headers:
+                self.send_header(k, v)
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def do_POST(self):
+            self.rfile.read(int(self.headers.get("Content-Length") or 0))
+            self._send(303, headers=[("Location", "/home"), ("Set-Cookie", "sid=abc; Path=/")])
+
+        def do_GET(self):
+            hits.append(self.path)
+            html = [("Content-Type", "text/html")]
+            if self.path == "/to-lan":
+                return self._send(302, headers=[("Location", "http://10.255.255.1/secret")])
+            if self.path == "/chain":
+                return self._send(302, headers=[("Location", "/hop2")])
+            if self.path == "/hop2":
+                return self._send(307, headers=[("Location", "http://169.254.169.254/latest/meta-data/")])
+            if self.path == "/fine":
+                return self._send(301, headers=[("Location", "/landed?x=1")])
+            if self.path == "/home":
+                return self._send(200, ("<h1>home %s</h1>" % self.headers.get("Cookie", "")).encode(), html)
+            if self.path == "/page":
+                return self._send(200, b"""<h1>start</h1><a id=f href="file:///etc/passwd">file</a>
+                    <a id=l href="http://192.168.1.1/admin">router</a>
+                    <form method=post action=/login><button id=go>log in</button></form>
+                    <iframe src="http://10.255.255.1/frame"></iframe>
+                    <script>function hop(){location.href="http://169.254.169.254/latest"}</script>""", html)
+            self._send(200, b"<h1>landed</h1>", html)
+
+    srv = ThreadingHTTPServer(("127.0.0.1", 0), H)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    base = f"http://127.0.0.1:{srv.server_address[1]}"
+    try:
+        if True:
+            guard = Guard()
+            ctx = pw.new_context(service_workers="block")
+            guard.install(ctx)
+            pg = ctx.new_page()
+            pg.set_default_timeout(8000)
+            for path in ("/to-lan", "/chain"):          # a redirect to a refused address is stopped at that hop
+                try:
+                    pg.goto(base + path)
+                except Exception:
+                    pass
+                pg.wait_for_timeout(700)
+                assert "10.255" not in pg.url and "169.254" not in pg.url
+            assert any("10.255.255.1" in u for u in guard.blocked) and any("169.254.169.254" in u for u in guard.blocked)
+            pg.goto(base + "/fine")                     # an ordinary redirect still works and ends on the real URL
+            pg.wait_for_url("**/landed?x=1")
+            assert pg.inner_text("h1") == "landed"
+            pg.goto(base + "/page")
+            assert pg.inner_text("h1") == "start"
+            assert any("10.255.255.1/frame" in u for u in guard.blocked)          # frame never loaded
+            for sel in ("#f", "#l"):                    # links to file:// and the LAN go nowhere
+                pg.click(sel)
+                pg.wait_for_timeout(400)
+                assert pg.url.startswith(base) or not pg.url.startswith(("file:", "http://192.168"))
+            pg.goto(base + "/page")
+            n = len(guard.blocked)
+            pg.evaluate("hop()")                        # a script navigation is checked too
+            pg.wait_for_timeout(600)
+            assert len(guard.blocked) > n and "169.254" not in pg.url
+            pg.goto(base + "/page")
+            pg.click("#go")                             # POST -> 303 with a cookie: logins keep working
+            pg.wait_for_url("**/home")
+            assert pg.inner_text("h1") == "home sid=abc"
+            ctx.close()
+    finally:
+        srv.shutdown()
+
+
+def test_tool_refuses_bad_urls(tmp_path):
+    from ht.netguard import BlockedURL
+    from ht.run import run_test
+    for bad in ("file:///etc/passwd", "http://169.254.169.254/latest/meta-data/", "http://192.168.0.1/"):
+        with pytest.raises(BlockedURL):
+            run_test(bad, "read it", lambda m: "{}", [PERSONAS["first_timer"]], tmp_path)
+    with pytest.raises(BlockedURL):
+        run_test("http://127.0.0.1:9/", "x", lambda m: "{}", [PERSONAS["first_timer"]], tmp_path,
+                 compare_url="file:///etc/passwd")
+    assert not list(tmp_path.glob("runs/*"))   # refused before anything is written or launched

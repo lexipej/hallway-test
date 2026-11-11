@@ -23,3 +23,4 @@ config_schema:
   max_steps: {type: int, default: 16, description: "Most actions per person per run (keyboard-only people get 1.8x)."}
   parallel: {type: int, default: 3, description: "How many browsers run at the same time (1-6). Lower it on slower machines; each one can use 300-600 MB."}
   time_budget_seconds: {type: int, default: 330, description: "Stop everyone after this long so the tool call finishes inside Hermes's tool timeout."}
+  allow_private_hosts: {type: bool, default: false, description: "Let testers open private-network addresses (192.168.x.x, 10.x.x.x and similar). Off by default; localhost always works, and link-local and cloud-metadata addresses are always refused."}

@@ -27,12 +27,12 @@ SCHEMA = {
         "off target). Each one tries the task in their own real browser, one decision at a time; you get who finished, "
         "who gave up and why in their own words, taps that did nothing, prioritised findings with fixes, a full HTML "
         "report with step-by-step replays, and a summary card image. You can add up to 3 custom people built from the "
-        "same enforced traits. Use url='demo' (and compare_url='demo:fixed') to try the bundled concert seat picker. Takes 1-5 minutes. Works on http(s) pages the machine can reach, including "
-        "localhost dev servers."),
+        "same enforced traits. Use url='demo' (and compare_url='demo:fixed') to try the bundled concert seat picker. Takes 1-5 minutes. Works on public http(s) pages and "
+        "localhost dev servers; other private-network addresses need the allow_private_hosts setting."),
     "parameters": {
         "type": "object",
         "properties": {
-            "url": {"type": "string", "description": "Page to test: http(s)://… or file:///…, or 'demo' for the bundled seat-picker app ('demo:fixed' for its repaired version)."},
+            "url": {"type": "string", "description": "Page to test: an http(s):// address (localhost dev servers are fine), or 'demo' for the bundled seat-picker app ('demo:fixed' for its repaired version)."},
             "task": {"type": "string", "description": "What the people should try to do, in plain words, e.g. "
                      "'Sign up for the newsletter with the email sam@example.com'. Optional for the demo."},
             "success_text": {"type": "string", "description": "Text that appears on the page only when the task is "
@@ -99,11 +99,20 @@ def _make_complete(ctx, max_tokens: int, timeout: float = 90):
     return complete
 
 
+def _truthy(v) -> bool:
+    return v is True or str(v).strip().lower() in ("1", "true", "yes", "on")
+
+
 def run_tool(ctx, args: dict) -> dict:
+    from .ht.netguard import Guard, normalise
     url, is_demo = demo.resolve(args.get("url", ""))
     if not url:
         raise ValueError("url is required")
     compare = demo.resolve(args.get("compare_url", ""))[0] if args.get("compare_url") else ""
+    # Refuse anything but http(s) pages on allowed hosts before a browser starts (BlockedURL is a ValueError).
+    guard = Guard(_truthy(ctx.get_config("allow_private_hosts", False)))
+    url = guard.check(normalise(url))
+    compare = guard.check(normalise(compare)) if compare else ""
     task = (args.get("task") or "").strip() or (demo.DEMO_TASK if is_demo else "")
     if not task:
         raise ValueError("task is required: say what the people should try to do")
@@ -125,7 +134,8 @@ def _run(ctx, args, url, is_demo, compare, task, success, viewport, max_steps, t
                     success_text=success, compare_url=compare, facts=args.get("facts", ""), max_steps=max_steps,
                     parallel=max(1, min(int(ctx.get_config("parallel", 3)), 6)), viewport=viewport, title=title,
                     findings_complete=_make_complete(ctx, 8000, timeout=180),
-                    time_budget=float(ctx.get_config("time_budget_seconds", 330)))
+                    time_budget=float(ctx.get_config("time_budget_seconds", 330)),
+                    allow_private_hosts=_truthy(ctx.get_config("allow_private_hosts", False)))
 
 
 MODEL_HINT = ("Hallway Test uses the model set for 'Hallway Test people' in Settings > Model > Auxiliary models "

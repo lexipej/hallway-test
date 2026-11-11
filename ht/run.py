@@ -4,7 +4,6 @@ from __future__ import annotations
 import json
 import os
 import random
-from urllib.parse import urlparse
 import re
 import threading
 import time
@@ -13,9 +12,11 @@ from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FuturesTimeout
 from pathlib import Path
 from typing import Callable, Optional
+from urllib.parse import urlparse
 
 from . import browser as B
 from .brain import FINDINGS_PROMPT, Brain, parse_findings
+from .netguard import Guard, normalise
 from .personas import Persona
 
 Complete = Callable[[list[dict]], str]
@@ -161,8 +162,12 @@ def off_site(start: str, now: str) -> str:
 
 def run_persona(url: str, p: Persona, variant: str, task: str, complete: Complete, run_dir: Path,
                 state: RunState, success_text: str = "", facts: str = "", max_steps: int = 20,
-                viewport=(420, 860), seed: int = 7, deadline: float = 0) -> dict:
+                viewport=(420, 860), seed: int = 7, deadline: float = 0,
+                guard: Optional[Guard] = None) -> dict:
     from playwright.sync_api import sync_playwright
+
+    guard = guard or Guard()
+    url = guard.check(normalise(url))
 
     key = f"{variant}:{p.id}"
     shots = run_dir / "shots"
@@ -183,7 +188,10 @@ def run_persona(url: str, p: Persona, variant: str, task: str, complete: Complet
     with sync_playwright() as pw:
         br = launch(pw)
         try:
-            page = br.new_page(viewport={"width": viewport[0], "height": viewport[1]}, reduced_motion="reduce")
+            context = br.new_context(viewport={"width": viewport[0], "height": viewport[1]},
+                                     reduced_motion="reduce", service_workers="block")
+            guard.install(context)   # every request, redirect hop and in-run navigation is checked
+            page = context.new_page()
             page.set_default_timeout(15000)
             page.add_init_script(SLOW_FRAMES_JS)
             page.goto(url, wait_until="domcontentloaded", timeout=30000)
@@ -230,6 +238,7 @@ def run_persona(url: str, p: Persona, variant: str, task: str, complete: Complet
                         status, reason = "error", d.get("error", "model kept replying without an action")
                         break
                     continue
+                refused = len(guard.blocked)
                 try:
                     res = B.act(page, p, obs, action, rng)
                 except B.ActionError as exc:
@@ -269,9 +278,16 @@ def run_persona(url: str, p: Persona, variant: str, task: str, complete: Complet
                     try:
                         page.go_back(wait_until="domcontentloaded", timeout=10000)
                     except Exception:
-                        page.goto(obs["raw"].get("url") or url, wait_until="domcontentloaded", timeout=30000)
+                        page.goto(url, wait_until="domcontentloaded", timeout=30000)
                     brain.record(action, thought, f"that opened a different website ({left}), so you came back; "
                                  "the task is on this site")
+                    continue
+                if len(guard.blocked) > refused:   # a link or redirect to an address the test may not open
+                    rec["blocked"] = guard.blocked[-1]
+                    if not (page.url or "").startswith("http"):
+                        page.goto(url, wait_until="domcontentloaded", timeout=30000)
+                    brain.record(action, thought, "that led to an address this test is not allowed to open, "
+                                 "so nothing loaded; the task is on this site")
                     continue
                 # Moving the typing cursor into a field is a visible change too (a tap on an empty field "worked").
                 changed = B.fingerprint(after) != fp or after.get("focus") != obs["raw"].get("focus")
@@ -404,7 +420,11 @@ def headline(results: list[dict], personas: dict) -> list[str]:
 def run_test(url: str, task: str, complete: Complete, personas: list[Persona], data_dir: Path,
              success_text: str = "", compare_url: str = "", facts: str = "", max_steps: int = 20,
              parallel: int = 3, viewport=(420, 860), title: str = "", label: str = "",
-             findings_complete: Optional[Complete] = None, time_budget: float = 330) -> dict:
+             findings_complete: Optional[Complete] = None, time_budget: float = 330,
+             allow_private_hosts: bool = False) -> dict:
+    guard = Guard(allow_private_hosts)
+    url = guard.check(normalise(url))
+    compare_url = guard.check(normalise(compare_url)) if compare_url else ""
     run_id = time.strftime("%Y%m%d-%H%M%S-") + uuid.uuid4().hex[:4]
     run_dir = Path(data_dir) / "runs" / run_id
     run_dir.mkdir(parents=True, exist_ok=True)
@@ -421,7 +441,7 @@ def run_test(url: str, task: str, complete: Complete, personas: list[Persona], d
     try:
         pool = ThreadPoolExecutor(max_workers=max(1, min(parallel, len(jobs))))
         futs = [pool.submit(run_persona, u, p, v, task, complete, run_dir, state, success_text, facts,
-                            max_steps, viewport, 7, deadline) for v, u, p in jobs]
+                            max_steps, viewport, 7, deadline, guard) for v, u, p in jobs]
         for (v, u, p), f in zip(jobs, futs):
             try:
                 # Never wait past the budget for a stuck browser: the tool must answer inside Hermes's timeout.

@@ -57,7 +57,7 @@ Ask Hermes in plain words, or call the `hallway_test` tool:
 
 | Field | |
 |---|---|
-| `url` | Any page this machine can open, including `http://localhost:…` dev servers |
+| `url` | An `http(s)` page: public sites and `http://localhost:…` dev servers (see *Which addresses it opens*) |
 | `task` | What people should try to do, with any details they need ("…use the email sam@example.com") |
 | `success_text` | Text that only appears when the task is done. Strongly recommended: success is then verified, not self-reported |
 | `compare_url` | Optional second version for before/after |
@@ -78,17 +78,30 @@ Ask Hermes in plain words, or call the `hallway_test` tool:
   present, otherwise the Microsoft Edge or Google Chrome already on your machine. It never downloads a browser
   itself; to use Playwright's Chromium, run `python -m playwright install chromium` in the Hermes environment.
 - Settings (Hermes Desktop: Settings → Plugins → hallway-test): `max_steps` (16), `parallel` (3 browsers at a time,
-  max 6) and `time_budget_seconds` (330, so a run always answers inside Hermes's tool timeout).
+  max 6) and `time_budget_seconds` (330, so a run always answers inside Hermes's tool timeout) and
+  `allow_private_hosts` (off; turn it on to test pages on your own network).
 - Gentle on your machine: animated pages are slowed to about 5 frames a second for the testers, audio is muted, and a
   browser only starts when at least 1.2 GB of memory is free.
 
 A run makes one model call per person per step plus one for the findings: typically 40–120 short calls and
 1–4 minutes for five people (twice that for before/after).
 
+## Which addresses it opens
+
+The tool is called by a model, and a tested page can link or redirect anywhere, so every address is checked before
+it loads, including each redirect hop and every navigation during a run:
+
+- Only `http` and `https`. `file://` and other schemes are refused.
+- `localhost` / `127.0.0.1` are allowed, for dev servers.
+- Private-network addresses (`10.x`, `172.16–31.x`, `192.168.x`, IPv6 unique-local) are refused unless you turn on
+  the `allow_private_hosts` setting.
+- Link-local and cloud-metadata addresses (`169.254.0.0/16`, `fd00:ec2::254`, `metadata.google.internal`) are always
+  refused. Host names are resolved and judged by the addresses they point to.
+
 ## Disclosure
 
 - **Browsing:** launches headless browser instances on your machine and opens only the URLs you give it (and the
-  bundled demo). It clicks and types into those pages as the personas, which can submit forms, so point it at dev or
+  bundled demo), subject to the address rules below. It clicks and types into those pages as the personas, which can submit forms, so point it at dev or
   staging environments, not production accounts.
 - **Model calls:** the filtered text of each screen, the task and the `facts` you provide are sent to your configured
   model provider through Hermes. Screenshots are not sent.
