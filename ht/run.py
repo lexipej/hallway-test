@@ -194,7 +194,11 @@ def run_persona(url: str, p: Persona, variant: str, task: str, complete: Complet
             page = context.new_page()
             page.set_default_timeout(15000)
             page.add_init_script(SLOW_FRAMES_JS)
-            page.goto(url, wait_until="domcontentloaded", timeout=30000)
+            try:
+                page.goto(url, wait_until="domcontentloaded", timeout=30000)
+            except Exception:   # one more try after a pause: several browsers opening one site can be throttled
+                page.wait_for_timeout(3000 + rng.randrange(4000))
+                page.goto(url, wait_until="domcontentloaded", timeout=30000)
             try:
                 page.wait_for_load_state("networkidle", timeout=4000)
             except Exception:

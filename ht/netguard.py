@@ -138,9 +138,17 @@ class Guard:
                 return route.continue_()
             # The browser follows redirects without asking again, so fetch one hop ourselves and turn a
             # redirect into a fresh navigation, which comes back through this check.
-            try:
-                resp = route.fetch(max_redirects=0)
-            except Exception:
+            resp = None
+            # Slow or rate-limited sites often answer on a second try. Never repeat a form submission.
+            for pause in ((0, 1500, 4000) if req.method == "GET" else (0,)):
+                try:
+                    if pause:
+                        req.frame.page.wait_for_timeout(pause)
+                    resp = route.fetch(max_redirects=0, timeout=30000)
+                    break
+                except Exception:
+                    resp = None
+            if resp is None:
                 return route.abort("failed")
             loc = resp.headers.get("location")
             if resp.status in REDIRECTS and loc:
